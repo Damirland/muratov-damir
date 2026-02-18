@@ -420,6 +420,10 @@ def delete_admin(message):
 def index():
     return render_template('index.html')
 
+@app.route('/main') # <-- ПРОВЕРЬ ЭТУ СТРОКУ
+def main_page():
+    return render_template('main.html')
+
 @app.route('/api/timetable')
 def get_timetable():
     conn = sqlite3.connect('DB_PATH')
