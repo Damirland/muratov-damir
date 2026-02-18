@@ -14,6 +14,7 @@ DB_URL = os.getenv('DATABASE_URL')
 URL = 'https://muratov-damir.onrender.com' 
 SUPER_ADMIN_ID = 1532505153
 CURRENT_SITE_URL = URL
+CRON_SECRET = os.getenv('CRON_SECRET', 'super-secret-reset-8a')
 
 bot = telebot.TeleBot(TOKEN, threaded=False)
 
@@ -390,6 +391,18 @@ def get_main_timetable():
     c.close()
     conn.close()
     return jsonify(rows)
+
+@app.route('/api/reset_schedule/' + CRON_SECRET)
+def web_clear_schedule():
+    """Секретная ссылка для автоматического сброса расписания"""
+    try:
+        # У тебя уже есть крутая функция auto_clear_schedule, 
+        # которая не только чистит базу, но и рассылает уведомления админам. 
+        # Просто вызываем её!
+        auto_clear_schedule()
+        return "✅ Временное расписание успешно сброшено!", 200
+    except Exception as e:
+        return f"❌ Ошибка при сбросе: {e}", 500
 
 # --- ЗАПУСК ВЕБХУКА ---
 @app.route('/set_webhook')
