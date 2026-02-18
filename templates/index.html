@@ -345,8 +345,8 @@
                 const lastLessonNum = Math.max(...dayLessons.map(l => l.lesson_num));
                 
                 // 2. Достаем расписание звонков для текущего дня
-                const currentTimes = timeSchedules[day] || timeSchedules['default'];
-                const lastStartTime = currentTimes[lastLessonNum];
+                const scheduleForEnd = timeSchedules[day] || timeSchedules['default'];
+                const lastStartTime = scheduleForEnd[lastLessonNum];
 
                 // 3. Если время найдено, считаем окончание и рисуем плашку
                 if (lastStartTime) {
@@ -383,6 +383,7 @@
 </body>
 
 </html>
+
 
 
 
