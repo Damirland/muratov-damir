@@ -201,6 +201,23 @@
             border-radius: 4px;
             font-size: 11px;
         }
+        /* Контейнер для правой части карточки урока (перемена + кабинет) */
+        .right-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        /* Бейджик перемены */
+        .break-badge {
+            font-size: 10px;
+            color: var(--text-muted);
+            background: rgba(0, 0, 0, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -247,6 +264,15 @@
 'default': { // Для Понедельника, Среды, Четверга, Пятницы и Субботы
     1: "08:00", 2: "08:50", 3: "09:45", 4: "10:40", 5: "11:35", 6: "12:25", 7: "13:15", 8: "14:10"
 }
+            };
+            // --- РАСПИСАНИЕ ПЕРЕМЕН (в минутах ПОСЛЕ урока) ---
+            const breaks = {
+                'Вторник': {
+                    1: 10, 2: 15, 3: 15, 4: 10, 5: 10, 6: 10, 7: 15, 8: 10, 9: 10, 10: 5, 11: 5
+                },
+                'default': { 
+                    1: 10, 2: 15, 3: 15, 4: 15, 5: 10, 6: 10, 7: 15, 8: 15, 9: 10, 10: 5, 11: 5
+                }
             };
             // Функция для прибавления 40 минут к началу урока
             function calculateEndTime(startTime) {
@@ -331,12 +357,27 @@
                         const startTime = currentTimes[lesson.lesson_num] || "";
                         const timeHtml = startTime ? `<span class="time-badge">${startTime}</span>` : "";
 
-                        // Новая структура: время звонка рядом с номером урока
+                        // === НОВОЕ: ВЫЧИСЛЯЕМ ПЕРЕМЕНУ ===
+                        const currentBreaks = breaks[day] || breaks['default'];
+                        const breakMins = currentBreaks[lesson.lesson_num];
+                        
+                        // Проверяем, последний ли это урок (чтобы не писать перемену перед уходом домой)
+                        const isLastLesson = lesson.lesson_num === Math.max(...dayLessons.map(l => l.lesson_num));
+                        
+                        let breakHtml = "";
+                        if (breakMins && !isLastLesson) {
+                            breakHtml = `<div class="break-badge">Перемена: ${breakMins} мин</div>`;
+                        }
+
+                        // Новая структура: предмет слева, перемена и кабинет справа
                         lessonDiv.innerHTML = `
                             <div class="lesson-time">Урок ${lesson.lesson_num} ${timeHtml}</div>
                             <div class="lesson-main">
                                 <span class="lesson-subject">${lesson.subject}</span>
-                                <span class="lesson-room">${lesson.room}</span>
+                                <div class="right-info">
+                                    ${breakHtml}
+                                    <span class="lesson-room">${lesson.room}</span>
+                                </div>
                             </div>
                         `;
                         dayCard.appendChild(lessonDiv);
@@ -375,6 +416,7 @@
 </body>
 
 </html>
+
 
 
 
