@@ -11,7 +11,7 @@ app = Flask(__name__)
 # --- НАСТРОЙКИ ---
 TOKEN = TOKEN = os.getenv('BOT_TOKEN')
 # Ссылка на твой сайт (ОБЯЗАТЕЛЬНО с https и БЕЗ слеша в конце)
-URL = 'https://wisposhka.pythonanywhere.com'
+URL = 'https://eighta-diary.onrender.com/'
 DB_URL = os.getenv('DATABASE_URL')
 
 bot = telebot.TeleBot(TOKEN, threaded=False)
