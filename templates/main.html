@@ -355,7 +355,13 @@
                         // Определяем, какое расписание звонков брать (Вторник или обычное)
                         const currentTimes = timeSchedules[day] || timeSchedules['default'];
                         const startTime = currentTimes[lesson.lesson_num] || "";
-                        const timeHtml = startTime ? `<span class="time-badge">${startTime}</span>` : "";
+                        let timeHtml = "";
+                        if (startTime) {
+                            // Пропускаем начало урока через наш калькулятор (он прибавит 40 минут)
+                            const lessonEndTime = calculateEndTime(startTime);
+                            // Выводим начало и конец через тире
+                            timeHtml = `<span class="time-badge">${startTime} - ${lessonEndTime}</span>`;
+                        }
 
                         // === НОВОЕ: ВЫЧИСЛЯЕМ ПЕРЕМЕНУ ===
                         const currentBreaks = breaks[day] || breaks['default'];
@@ -418,6 +424,7 @@
 </body>
 
 </html>
+
 
 
 
