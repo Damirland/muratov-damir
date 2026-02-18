@@ -153,14 +153,36 @@ def process_day_selection(message, action):
     if action == "clear":
         execute_clear(message, day)
     else:
-        msg = bot.send_message(message.chat.id, f"Пришли расписание на {day} в формате:\n1. Предмет (Каб)", reply_markup=types.ReplyKeyboardRemove())
-        bot.register_next_step_handler(msg, save_schedule, day, action)
+        # --- Подключаемся к базе, чтобы достать текущее расписание ---
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        current_lessons = []
+        
+        # Если добавляем временное изменение, сначала ищем, нет ли уже временных изменений на этот день
+        if action == "add":
+            c.execute("SELECT lesson_num, subject, room FROM lessons WHERE class_name = '8А' AND day = %s ORDER BY lesson_num", (day,))
+            current_lessons = c.fetchall()
+            
+        # Если мы меняем ОСНОВНОЕ расписание ИЛИ если временных изменений пока нет — берем основу
+        if not current_lessons:
+            c.execute("SELECT lesson_num, subject, room FROM main_lessons WHERE class_name = '8А' AND day = %s ORDER BY lesson_num", (day,))
+            current_lessons = c.fetchall()
+            
+        c.close()
+        conn.close()
 
-def save_schedule(message, day, action):
-    if not is_admin(message.from_user.id): return
-    if message.text == "❌ Отмена":
-        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
-        return
+        # Формируем текст из расписания (или стандартный шаблон, если день в базе пуст)
+        if current_lessons:
+            schedule_text = "\n".join([f"{row[0]}. {row[1]} ({row[2]})" for row in current_lessons])
+        else:
+            schedule_text = "1. Предмет (Каб)\n2. Предмет (Каб)"
+
+        msg_text = f"Пришли расписание на {day} в формате ниже (просто скопируй, измени что нужно и отправь):\n\n`{schedule_text}`"
+        
+        # Отправляем сообщение
+        msg = bot.send_message(message.chat.id, msg_text, parse_mode='Markdown', reply_markup=types.ReplyKeyboardRemove())
+        bot.register_next_step_handler(msg, save_schedule, day, action)
 
     lines = message.text.strip().split('\n')
     valid_lines = []
