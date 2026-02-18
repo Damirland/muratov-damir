@@ -248,7 +248,7 @@ def save_schedule(message, day, action):
 
         for line in lines:
             line = line.strip()
-            line = line.replace('`', '') # Очищаем от случайных кавычек, если они были
+            line = line.replace('`', '') # Очищаем от случайных кавычек
             
             if not line: continue
             if '.' not in line:
@@ -273,16 +273,13 @@ def save_schedule(message, day, action):
                 errors.append(f"В строке '{line}' не указано название предмета.")
                 continue
 
-           if '(' in content and ')' in content:
-                # Если кабинет указан явно (в скобках)
+            # --- НОВАЯ ЛОГИКА КАБИНЕТОВ С ПРАВИЛЬНЫМИ ОТСТУПАМИ ---
+            if '(' in content and ')' in content:
                 start, end = content.find('('), content.rfind(')')
                 subject = content[:start].strip()
                 room = content[start+1:end].strip()
             else:
-                # Если скобок нет, берем предмет как есть
                 subject = content.strip()
-                # Ищем этот предмет в нашем словаре дефолтных кабинетов. 
-                # Если его там нет — ставим прочерк "—"
                 room = DEFAULT_ROOMS.get(subject, "—")
                 
             valid_lines.append((lesson_num, subject, room))
@@ -290,7 +287,6 @@ def save_schedule(message, day, action):
         if errors:
             error_msg = "❌ Найдена ошибка в нумерации или формате!\n\n" + "\n".join(errors) + "\n\nИсправь и пришли заново:"
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(types.KeyboardButton("❌ Отмена"))
-            # ВАЖНО: Мы убрали parse_mode='Markdown' здесь. Именно это ломало бота!
             msg = bot.send_message(message.chat.id, error_msg, reply_markup=markup)
             bot.register_next_step_handler(msg, save_schedule, day, action)
             return
@@ -309,7 +305,6 @@ def save_schedule(message, day, action):
         bot.send_message(message.chat.id, f"✅ Расписание на {day} сохранено!", reply_markup=get_main_keyboard(message.from_user.id))
         
     except Exception as e:
-        # Теперь, если что-то сломается, бот не промолчит, а пришлет вам текст ошибки
         bot.send_message(message.chat.id, f"⚠️ Системная ошибка при сохранении:\n{e}\n\nПопробуйте еще раз.", reply_markup=get_main_keyboard(message.from_user.id))
 
 def execute_clear(message, day):
