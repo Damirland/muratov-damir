@@ -366,19 +366,20 @@
                         
                         let breakHtml = "";
                         if (breakMins && !isLastLesson) {
-                            breakHtml = `<div class="break-badge">Перемена: ${breakMins} мин</div>`;
+                            // Мы сделали это <span> и добавили margin-left: auto, 
+                            // чтобы перемена автоматически прижималась к правому краю строчки
+                            breakHtml = `<span class="break-badge" style="margin-left: auto;">Перемена: ${breakMins} мин</span>`;
                         }
 
-                        // Новая структура: время звонка рядом с номером урока
-                        // Новая структура: предмет слева, перемена и кабинет справа
+                        // Новая структура: перемена переехала наверх, а кабинет вернулся на место
                         lessonDiv.innerHTML = `
-                            <div class="lesson-time">Урок ${lesson.lesson_num} ${timeHtml}</div>
+                            <div class="lesson-time" style="display: flex; align-items: center;">
+                                Урок ${lesson.lesson_num} ${timeHtml}
+                                ${breakHtml}
+                            </div>
                             <div class="lesson-main">
                                 <span class="lesson-subject">${lesson.subject}</span>
-                                <div class="right-info">
-                                    ${breakHtml}
-                                    <span class="lesson-room">${lesson.room}</span>
-                                </div>
+                                <span class="lesson-room">${lesson.room}</span>
                             </div>
                         `;
                         dayCard.appendChild(lessonDiv);
@@ -417,6 +418,7 @@
 </body>
 
 </html>
+
 
 
 
