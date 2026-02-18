@@ -236,7 +236,17 @@
 
         function renderTimetable(lessons) {
             const container = document.getElementById('timetableContainer');
-            container.innerHTML = ''; 
+            container.innerHTML = '';
+            // --- РАСПИСАНИЕ ЗВОНКОВ ---
+            // Впиши сюда точное время начала уроков из своих таблиц!
+            const timeSchedules = {
+                'Вторник': {
+                    1: "08:00", 2: "08:50", 3: "09:40", 4: "10:45", 5: "11:50", 6: "12:45", 7: "13:40", 8: "14:30"
+                },
+                'default': { // Для Понедельника, Среды, Четверга и Пятницы
+                    1: "08:00", 2: "08:55", 3: "09:50", 4: "10:55", 5: "12:00", 6: "13:00", 7: "13:55", 8: "14:50"
+                }
+            };
 
             const daysData = {};
             lessons.forEach(lesson => {
@@ -281,9 +291,14 @@
                         const subjectColor = colors[lesson.subject] || '#ccc';
                         lessonDiv.style.borderLeftColor = subjectColor;
 
-                        // Новая структура: предмет слева, кабинет справа
+                        // Определяем, какое расписание звонков брать (Вторник или обычное)
+                        const currentTimes = timeSchedules[day] || timeSchedules['default'];
+                        const startTime = currentTimes[lesson.lesson_num] || "";
+                        const timeHtml = startTime ? `<span class="time-badge">${startTime}</span>` : "";
+
+                        // Новая структура: время звонка рядом с номером урока
                         lessonDiv.innerHTML = `
-                            <div class="lesson-time">Урок ${lesson.lesson_num}</div>
+                            <div class="lesson-time">Урок ${lesson.lesson_num} ${timeHtml}</div>
                             <div class="lesson-main">
                                 <span class="lesson-subject">${lesson.subject}</span>
                                 <span class="lesson-room">${lesson.room}</span>
@@ -307,5 +322,6 @@
 </body>
 
 </html>
+
 
 
