@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Расписание 8А</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --primary-blue: #007bff;
+            --text-main: #2c3e50;
+            --text-muted: #7f8c8d;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-main);
+        }
+
+        h1 { text-align: center; margin-bottom: 30px; color: var(--primary-blue); }
+
+        .timetable {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px; /* Чуть уменьшили отступ, чтобы точно влезло */
+            justify-content: center;
+            max-width: 1600px; /* Расширили контейнер почти на весь экран */
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .day-card {
+            background: var(--card-bg);
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            padding: 15px;
+            /* Flex-магия: карточки будут стараться занимать равное место, 
+               но не сожмутся меньше 200px */
+            flex: 1 1 200px; 
+            max-width: none; /* Убрали жесткое ограничение в 300px */
+        }
+
+        .day-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--primary-blue);
+            border-bottom: 2px solid #eef2f7;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        /* Обновленный стиль урока */
+        .lesson {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            border-left: 5px solid #ccc;
+            background: #f8f9fa;
+            /* Убрали cursor: pointer, так как кликать больше нельзя */
+        }
+
+        .lesson-time {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        /* Контейнер для предмета и кабинета */
+        .lesson-main {
+            display: flex;
+            justify-content: space-between; /* Предмет слева, кабинет справа */
+            align-items: center;
+            gap: 10px;
+        }
+
+        .lesson-subject {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .lesson-room {
+            font-size: 14px;
+            color: var(--text-muted);
+            background: #eee;
+            padding: 2px 8px;
+            border-radius: 5px;
+            white-space: nowrap; /* Чтобы номер кабинета не переносился */
+        }
+
+        .empty-day-msg {
+            color: var(--text-muted);
+            font-size: 14px;
+            text-align: center;
+            padding: 20px 0;
+            font-style: italic;
+            border: 1px dashed #ddd;
+            border-radius: 10px;
+        }
+
+        /* Подсветка текущего дня */
+        .day-card.today {
+            border: 2px solid var(--primary-blue);
+            box-shadow: 0 0 20px rgba(0, 123, 255, 0.15);
+            position: relative;
+        }
+
+        .day-card.today::before {
+            content: "СЕГОДНЯ";
+            position: absolute;
+            top: -10px;
+            right: 15px;
+            background: var(--primary-blue);
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .day-card { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Расписание 8А класса</h1>
+    <div style="text-align: center; margin-bottom: 20px;">
+    <a href="/" style="text-decoration: none; padding: 10px; color: #007bff;">Дневник на сегодня</a>
+    | 
+    <a href="/main" style="text-decoration: none; padding: 10px; color: #007bff;">Основное расписание</a>
+</div>
+    <div class="timetable" id="timetableContainer"></div>
+    
+
+    <script>
+        async function fetchTimetable() {
+            try {
+                const response = await fetch(`/api/timetable`);
+                const data = await response.json();
+                renderTimetable(data);
+            } catch (err) {
+                console.error("Ошибка загрузки:", err);
+            }
+        }
+
+        function renderTimetable(lessons) {
+            const container = document.getElementById('timetableContainer');
+            container.innerHTML = ''; 
+
+            const daysData = {};
+            lessons.forEach(lesson => {
+                if (!daysData[lesson.day]) daysData[lesson.day] = [];
+                daysData[lesson.day].push(lesson);
+            });
+
+            const fullWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
+            const todayName = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(new Date());
+            const capitalizedToday = todayName.charAt(0).toUpperCase() + todayName.slice(1);
+
+            fullWeek.forEach(day => {
+                const dayCard = document.createElement('div');
+                dayCard.className = 'day-card';
+                if (day === capitalizedToday) dayCard.classList.add('today');
+
+                dayCard.innerHTML = `<div class="day-title">${day}</div>`;
+                
+                const dayLessons = daysData[day];
+
+                if (dayLessons && dayLessons.length > 0) {
+                    dayLessons.sort((a, b) => a.lesson_num - b.lesson_num);
+                    dayLessons.forEach(lesson => {
+                        const lessonDiv = document.createElement('div');
+                        lessonDiv.className = 'lesson';
+                        
+                        const colors = {
+                            'Алгебра': '#4a90e2', 'Геометрия': '#4a90e2',
+                            'Русский язык': '#e67e22', 'Литература': '#e67e22',
+                            'Физкультура': '#27ae60', 'Информатика': '#9b59b6',
+                            'История': '#e74c3c', 'География': '#f1c40f',
+                            "Химия": "#25a876", "Английский язык / Информатика": "#911129",
+                            "Музыка": "#d5d911", "Обществознание": "#00691a",
+                            "Биология": "#27ba4c", "Классный час": "#368fcf",
+                            "Дополнительная информатика": "#4a90e2", "Физика": "#a6e3dc",
+                            "Труд": "#bf7b5c", "Дополнительная математика": "#4a90e2",
+                            "ОБЗР": "#214a12", "Английский язык": "#9c1414",
+                            "Практикум по русскому языку": "#e67e22", "Решение задач по математике": "#4a90e2",
+                            "Функциональная грамотность": "#e67e22", "Вероятность и статистика": "#4a90e2",
+                            "Семьеведение": "#c22559"
+                        };
+                        const subjectColor = colors[lesson.subject] || '#ccc';
+                        lessonDiv.style.borderLeftColor = subjectColor;
+
+                        // Новая структура: предмет слева, кабинет справа
+                        lessonDiv.innerHTML = `
+                            <div class="lesson-time">Урок ${lesson.lesson_num}</div>
+                            <div class="lesson-main">
+                                <span class="lesson-subject">${lesson.subject}</span>
+                                <span class="lesson-room">${lesson.room}</span>
+                            </div>
+                        `;
+                        dayCard.appendChild(lessonDiv);
+                    });
+                } else {
+                    const emptyMsg = document.createElement('div');
+                    emptyMsg.className = 'empty-day-msg';
+                    emptyMsg.innerText = 'Основное расписание';
+                    dayCard.appendChild(emptyMsg);
+                }
+
+                container.appendChild(dayCard);
+            });
+        }
+
+        window.onload = fetchTimetable;
+    </script>
+</body>
+</html>
