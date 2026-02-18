@@ -1,48 +1,50 @@
-import sqlite3
 import os
 import telebot
 from flask import Flask, render_template, jsonify, request
 import threading
 from telebot import types # Импортируем типы для создания кнопок
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 
 # --- НАСТРОЙКИ ---
-TOKEN = '8511159340:AAGHwB3RMoyeoNwJ44hrxzwKHWmHkzQfm6Q'
+TOKEN = TOKEN = os.getenv('BOT_TOKEN')
 # Ссылка на твой сайт (ОБЯЗАТЕЛЬНО с https и БЕЗ слеша в конце)
 URL = 'https://wisposhka.pythonanywhere.com'
+DB_URL = os.getenv('DATABASE_URL')
 
 bot = telebot.TeleBot(TOKEN, threaded=False)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'school.db')
-TOKEN = '8511159340:AAGHwB3RMoyeoNwJ44hrxzwKHWmHkzQfm6Q'
 SUPER_ADMIN_ID = 1532505153
 CURRENT_SITE_URL = "⏳ Ссылка еще генерируется... Подожди пару секунд."
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-# --- ЛОГИКА БОТА (ВЕБХУК) ---
+    # Подключаемся к Supabase через psycopg2
+    return psycopg2.connect(DB_URL)
 
 def init_db():
-    conn = sqlite3.connect('DB_PATH')
+    conn = get_db_connection()
     c = conn.cursor()
-    # Таблица админов (оставляем как было)
-    c.execute('''CREATE TABLE IF NOT EXISTS admins (user_id INTEGER PRIMARY KEY)''')
-    c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (SUPER_ADMIN_ID,))
-
-    # НОВАЯ: Таблица всех пользователей
+    # Создаем таблицы (в Postgres синтаксис такой же)
+    c.execute('''CREATE TABLE IF NOT EXISTS admins (user_id BIGINT PRIMARY KEY)''')
+    # ВАЖНО: Вместо % используем %s
+    c.execute("INSERT INTO admins (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (SUPER_ADMIN_ID,))
+    
     c.execute('''CREATE TABLE IF NOT EXISTS users (
-                    user_id INTEGER PRIMARY KEY,
-                    username TEXT,
-                    first_name TEXT
-                )''')
+                    user_id BIGINT PRIMARY KEY, 
+                    username TEXT, 
+                    first_name TEXT)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS lessons 
+                 (id SERIAL PRIMARY KEY, class_name TEXT, day TEXT, lesson_num INTEGER, subject TEXT, room TEXT)''')
+    
     conn.commit()
+    c.close()
     conn.close()
 
-init_db() # Запускаем при старте
+init_db()
 
 @app.route('/' + TOKEN, methods=['POST'])
 def getMessage():
@@ -59,7 +61,7 @@ def start(message):
 def is_admin(message):
     conn = sqlite3.connect('DB_PATH')
     c = conn.cursor()
-    c.execute("SELECT user_id FROM admins WHERE user_id = ?", (message.from_user.id,))
+    c.execute("SELECT user_id FROM admins WHERE user_id = %s", (message.from_user.id,))
     admin = c.fetchone()
     conn.close()
     return admin is not None
@@ -102,7 +104,7 @@ def send_site_link(message):
 def send_welcome(message):
     conn = sqlite3.connect('DB_PATH')
     c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name) VALUES (?, ?, ?)",
+    c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name) VALUES (%s, %s, %s)",
               (message.from_user.id, message.from_user.username, message.from_user.first_name))
     conn.commit()
     conn.close()
@@ -234,9 +236,9 @@ def save_schedule(message, day, action):
     table = "lessons" if action == "add" else "main_lessons"
     conn = sqlite3.connect('DB_PATH')
     c = conn.cursor()
-    c.execute(f"DELETE FROM {table} WHERE class_name = '8А' AND day = ?", (day,))
+    c.execute(f"DELETE FROM {table} WHERE class_name = '8А' AND day = %s", (day,))
     for num, sub, rm in valid_lines:
-        c.execute(f"INSERT INTO {table} (day, lesson_num, subject, room, class_name) VALUES (?, ?, ?, ?, '8А')",
+        c.execute(f"INSERT INTO {table} (day, lesson_num, subject, room, class_name) VALUES (%s, %s, %s, %s, '8А')",
                   (day, num, sub, rm))
     conn.commit()
     conn.close()
@@ -245,7 +247,7 @@ def save_schedule(message, day, action):
 def execute_clear(message, day):
     conn = sqlite3.connect('DB_PATH')
     c = conn.cursor()
-    c.execute("DELETE FROM lessons WHERE class_name = '8А' AND day = ?", (day,))
+    c.execute("DELETE FROM lessons WHERE class_name = '8А' AND day = %s", (day,))
     conn.commit()
     conn.close()
     bot.send_message(message.chat.id, f"🗑 Изменения на {day} удалены.", reply_markup=get_main_keyboard(message.from_user.id))
@@ -296,9 +298,6 @@ def auto_clear_schedule():
     except Exception as e:
         print(f"Ошибка при автоочистке: {e}")
 
-# Настраиваем таймер: каждый понедельник ровно в 00:01
-schedule.every().monday.at("00:01").do(auto_clear_schedule)
-
 # --- ДОБАВЛЕНИЕ НОВОГО АДМИНА ---
 
 @bot.message_handler(func=lambda m: m.text == "👑 Добавить админа")
@@ -334,7 +333,7 @@ def process_new_admin(message):
     try:
         conn = sqlite3.connect('DB_PATH')
         c = conn.cursor()
-        c.execute("INSERT INTO admins (user_id) VALUES (?)", (new_admin_id,))
+        c.execute("INSERT INTO admins (user_id) VALUES (%s)", (new_admin_id,))
         conn.commit()
         conn.close()
 
@@ -401,14 +400,14 @@ def delete_admin(message):
     c = conn.cursor()
 
     # Проверяем, есть ли такой админ в базе
-    c.execute("SELECT user_id FROM admins WHERE user_id = ?", (target_id,))
+    c.execute("SELECT user_id FROM admins WHERE user_id = %s", (target_id,))
     if not c.fetchone():
         bot.reply_to(message, "🤷‍♂️ Пользователь с таким ID не найден в списке модераторов.")
         conn.close()
         return
 
     # Удаляем админа
-    c.execute("DELETE FROM admins WHERE user_id = ?", (target_id,))
+    c.execute("DELETE FROM admins WHERE user_id = %s", (target_id,))
     conn.commit()
     conn.close()
 
@@ -432,7 +431,7 @@ def get_timetable():
 
     for day in days:
         # 1. Проверяем, есть ли временные изменения на этот день
-        c.execute("SELECT * FROM lessons WHERE class_name = '8А' AND day = ? ORDER BY lesson_num", (day,))
+        c.execute("SELECT * FROM lessons WHERE class_name = '8А' AND day = %s ORDER BY lesson_num", (day,))
         overrides = c.fetchall()
 
         if overrides:
@@ -440,7 +439,7 @@ def get_timetable():
             final_schedule.extend([dict(row) for row in overrides])
         else:
             # 2. Если изменений нет, берем из основного расписания
-            c.execute("SELECT * FROM main_lessons WHERE class_name = '8А' AND day = ? ORDER BY lesson_num", (day,))
+            c.execute("SELECT * FROM main_lessons WHERE class_name = '8А' AND day = %s ORDER BY lesson_num", (day,))
             main = c.fetchall()
             final_schedule.extend([dict(row) for row in main])
 
