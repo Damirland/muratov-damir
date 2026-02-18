@@ -220,7 +220,7 @@ def process_day_selection(message, action):
                 schedule_text = "1. Предмет (Каб)\n2. Предмет (Каб)"
 
             # Убрали Markdown (обратные кавычки), чтобы избежать сбоев при копировании
-            msg_text = f"Пришли расписание на {day.lowercase} в формате ниже (кабинет вставляется автоматически, но если надо указать другой, то указываем в скобочках):\n\n{schedule_text}"
+            msg_text = f"Пришли расписание на {day.lower()} в формате ниже (кабинет вставляется автоматически, но если надо указать другой, то указываем в скобочках):\n\n{schedule_text}"
             
             msg = bot.send_message(message.chat.id, msg_text, reply_markup=types.ReplyKeyboardRemove())
             bot.register_next_step_handler(msg, save_schedule, day, action)
