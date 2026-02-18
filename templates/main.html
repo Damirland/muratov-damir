@@ -127,6 +127,33 @@
         @media (max-width: 600px) {
             .day-card { max-width: 100%; }
         }
+
+        /* Стили для анимации загрузки */
+        .loader-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 50px 0;
+            color: var(--primary-blue);
+            font-weight: 600;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 123, 255, 0.2);
+            border-top: 4px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -137,17 +164,26 @@
     | 
     <a href="/main" style="text-decoration: none; padding: 10px; color: #007bff;">Основное расписание</a>
 </div>
-    <div class="timetable" id="timetableContainer"></div>
+    <div class="timetable" id="timetableContainer">
+        <div class="loader-container">
+            <div class="spinner"></div>
+            <div>Загрузка расписания...</div>
+        </div>
+    </div>
     
 
     <script>
         async function fetchTimetable() {
             try {
-                const response = await fetch(`/api/main_timetable`);
+                // В index.html тут будет /api/timetable, а в main.html - /api/main_timetable
+                // Оставь тот путь, который был в файле изначально!
+                const response = await fetch(`/api/main_timetable`); 
                 const data = await response.json();
                 renderTimetable(data);
             } catch (err) {
                 console.error("Ошибка загрузки:", err);
+                document.getElementById('timetableContainer').innerHTML = 
+                    '<div class="loader-container" style="color: #e74c3c;">❌ Ошибка загрузки. Попробуйте обновить страницу.</div>';
             }
         }
 
@@ -222,4 +258,5 @@
         window.onload = fetchTimetable;
     </script>
 </body>
+
 </html>
