@@ -11,7 +11,7 @@ app = Flask(__name__)
 TOKEN = os.getenv('BOT_TOKEN')
 DB_URL = os.getenv('DATABASE_URL')
 # Убрал слеш в конце URL, чтобы вебхук не ломался (не //8511...)
-URL = 'https://eighta-diary.onrender.com' 
+URL = 'https://muratov-damir.onrender.com' 
 SUPER_ADMIN_ID = 1532505153
 CURRENT_SITE_URL = URL
 
