@@ -153,91 +153,115 @@ def process_day_selection(message, action):
     if action == "clear":
         execute_clear(message, day)
     else:
-        # --- Подключаемся к базе, чтобы достать текущее расписание ---
+        try:
+            # Подключаемся к базе, чтобы достать текущее расписание
+            conn = get_db_connection()
+            c = conn.cursor()
+            current_lessons = []
+            
+            if action == "add":
+                c.execute("SELECT lesson_num, subject, room FROM lessons WHERE class_name = '8А' AND day = %s ORDER BY lesson_num", (day,))
+                current_lessons = c.fetchall()
+                
+            if not current_lessons:
+                c.execute("SELECT lesson_num, subject, room FROM main_lessons WHERE class_name = '8А' AND day = %s ORDER BY lesson_num", (day,))
+                current_lessons = c.fetchall()
+                
+            c.close()
+            conn.close()
+
+            if current_lessons:
+                schedule_text = "\n".join([f"{row[0]}. {row[1]} ({row[2]})" for row in current_lessons])
+            else:
+                schedule_text = "1. Предмет (Каб)\n2. Предмет (Каб)"
+
+            # Убрали Markdown (обратные кавычки), чтобы избежать сбоев при копировании
+            msg_text = f"Пришли расписание на {day} в формате ниже (просто скопируй, измени что нужно и отправь):\n\n{schedule_text}"
+            
+            msg = bot.send_message(message.chat.id, msg_text, reply_markup=types.ReplyKeyboardRemove())
+            bot.register_next_step_handler(msg, save_schedule, day, action)
+        except Exception as e:
+            bot.send_message(message.chat.id, f"⚠️ Ошибка при загрузке шаблона: {e}")
+
+def save_schedule(message, day, action):
+    try:
+        if not is_admin(message.from_user.id): return
+        
+        # Защита от отправки фото/стикера вместо текста
+        if not message.text:
+            msg = bot.send_message(message.chat.id, "❌ Пожалуйста, отправь расписание текстом.")
+            bot.register_next_step_handler(msg, save_schedule, day, action)
+            return
+
+        if message.text == "❌ Отмена":
+            bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
+            return
+
+        lines = message.text.strip().split('\n')
+        valid_lines = []
+        errors = []
+        seen_numbers = set()
+
+        for line in lines:
+            line = line.strip()
+            line = line.replace('`', '') # Очищаем от случайных кавычек, если они были
+            
+            if not line: continue
+            if '.' not in line:
+                errors.append(f"В строке '{line}' пропущена точка.")
+                continue
+            
+            parts = line.split('.', 1)
+            num_str = parts[0].strip()
+            content = parts[1].strip()
+
+            if not num_str.isdigit():
+                errors.append(f"В строке '{line}' номер урока должен быть числом.")
+                continue
+            lesson_num = int(num_str)
+
+            if lesson_num in seen_numbers:
+                errors.append(f"Номер урока {lesson_num} встречается дважды. Исправь нумерацию.")
+                continue
+            seen_numbers.add(lesson_num)
+
+            if not content:
+                errors.append(f"В строке '{line}' не указано название предмета.")
+                continue
+
+            room, subject = "—", content
+            if '(' in content and ')' in content:
+                # Используем rfind для закрывающей скобки на случай предметов типа "Труд(техн) (201)"
+                start, end = content.find('('), content.rfind(')')
+                subject = content[:start].strip()
+                room = content[start+1:end].strip()
+                
+            valid_lines.append((lesson_num, subject, room))
+
+        if errors:
+            error_msg = "❌ Найдена ошибка в нумерации или формате!\n\n" + "\n".join(errors) + "\n\nИсправь и пришли заново:"
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(types.KeyboardButton("❌ Отмена"))
+            # ВАЖНО: Мы убрали parse_mode='Markdown' здесь. Именно это ломало бота!
+            msg = bot.send_message(message.chat.id, error_msg, reply_markup=markup)
+            bot.register_next_step_handler(msg, save_schedule, day, action)
+            return
+
+        table = "lessons" if action == "add" else "main_lessons"
         conn = get_db_connection()
         c = conn.cursor()
-        
-        current_lessons = []
-        
-        # Если добавляем временное изменение, сначала ищем, нет ли уже временных изменений на этот день
-        if action == "add":
-            c.execute("SELECT lesson_num, subject, room FROM lessons WHERE class_name = '8А' AND day = %s ORDER BY lesson_num", (day,))
-            current_lessons = c.fetchall()
-            
-        # Если мы меняем ОСНОВНОЕ расписание ИЛИ если временных изменений пока нет — берем основу
-        if not current_lessons:
-            c.execute("SELECT lesson_num, subject, room FROM main_lessons WHERE class_name = '8А' AND day = %s ORDER BY lesson_num", (day,))
-            current_lessons = c.fetchall()
-            
+        c.execute(f"DELETE FROM {table} WHERE class_name = '8А' AND day = %s", (day,))
+        for num, sub, rm in valid_lines:
+            c.execute(f"INSERT INTO {table} (day, lesson_num, subject, room, class_name) VALUES (%s, %s, %s, %s, '8А')",
+                      (day, num, sub, rm))
+        conn.commit()
         c.close()
         conn.close()
-
-        # Формируем текст из расписания (или стандартный шаблон, если день в базе пуст)
-        if current_lessons:
-            schedule_text = "\n".join([f"{row[0]}. {row[1]} ({row[2]})" for row in current_lessons])
-        else:
-            schedule_text = "1. Предмет (Каб)\n2. Предмет (Каб)"
-
-        msg_text = f"Пришли расписание на {day} в формате ниже (просто скопируй, измени что нужно и отправь):\n\n`{schedule_text}`"
         
-        # Отправляем сообщение
-        msg = bot.send_message(message.chat.id, msg_text, parse_mode='Markdown', reply_markup=types.ReplyKeyboardRemove())
-        bot.register_next_step_handler(msg, save_schedule, day, action)
-
-    lines = message.text.strip().split('\n')
-    valid_lines = []
-    errors = []
-    seen_numbers = set()
-
-    for line in lines:
-        line = line.strip()
-        if not line: continue
-        if '.' not in line:
-            errors.append(f"В строке '{line}' пропущена точка.")
-            continue
-        parts = line.split('.', 1)
-        num_str = parts[0].strip()
-        content = parts[1].strip()
-
-        if not num_str.isdigit():
-            errors.append(f"В строке '{line}' номер урока должен быть числом.")
-            continue
-        lesson_num = int(num_str)
-
-        if lesson_num in seen_numbers:
-            errors.append(f"Номер урока {lesson_num} встречается дважды. Исправь нумерацию.")
-            continue
-        seen_numbers.add(lesson_num)
-
-        if not content:
-            errors.append(f"В строке '{line}' не указано название предмета.")
-            continue
-
-        room, subject = "—", content
-        if '(' in content and ')' in content:
-            start, end = content.find('('), content.find(')')
-            subject = content[:start].strip()
-            room = content[start+1:end].strip()
-        valid_lines.append((lesson_num, subject, room))
-
-    if errors:
-        error_msg = "❌ **Найдена ошибка в нумерации или формате!**\n\n" + "\n".join(errors) + "\n\nИсправь и пришли заново:"
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(types.KeyboardButton("❌ Отмена"))
-        msg = bot.send_message(message.chat.id, error_msg, reply_markup=markup, parse_mode='Markdown')
-        bot.register_next_step_handler(msg, save_schedule, day, action)
-        return
-
-    table = "lessons" if action == "add" else "main_lessons"
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(f"DELETE FROM {table} WHERE class_name = '8А' AND day = %s", (day,))
-    for num, sub, rm in valid_lines:
-        c.execute(f"INSERT INTO {table} (day, lesson_num, subject, room, class_name) VALUES (%s, %s, %s, %s, '8А')",
-                  (day, num, sub, rm))
-    conn.commit()
-    c.close()
-    conn.close()
-    bot.send_message(message.chat.id, f"✅ Расписание на {day} сохранено!", reply_markup=get_main_keyboard(message.from_user.id))
+        bot.send_message(message.chat.id, f"✅ Расписание на {day} сохранено!", reply_markup=get_main_keyboard(message.from_user.id))
+        
+    except Exception as e:
+        # Теперь, если что-то сломается, бот не промолчит, а пришлет вам текст ошибки
+        bot.send_message(message.chat.id, f"⚠️ Системная ошибка при сохранении:\n{e}\n\nПопробуйте еще раз.", reply_markup=get_main_keyboard(message.from_user.id))
 
 def execute_clear(message, day):
     conn = get_db_connection()
