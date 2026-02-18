@@ -153,9 +153,47 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Стиль для юзернейма создателя */
+        .creator-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-decoration: none;
+            background: var(--card-bg);
+            padding: 6px 12px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+
+        .creator-badge:hover {
+            color: var(--primary-blue);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* Адаптация для мобильных телефонов, чтобы не наезжало на заголовок */
+        @media (max-width: 600px) {
+            .creator-badge {
+                position: relative;
+                display: block;
+                top: 0;
+                right: 0;
+                width: max-content;
+                margin: 0 auto 15px auto;
+                text-align: center;
+            }
+            h1 {
+                margin-top: 5px;
+            }
+        }
     </style>
 </head>
 <body>
+    <a href="https://t.me/wisposhka" target="_blank" class="creator-badge">@wisposhka</a>
 
     <h1>Расписание 8А класса</h1>
     <div style="text-align: center; margin-bottom: 20px;">
@@ -259,3 +297,4 @@
 </body>
 
 </html>
+
