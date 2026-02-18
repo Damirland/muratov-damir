@@ -340,31 +340,6 @@
                             </div>
                         `;
                         dayCard.appendChild(lessonDiv);
-                        // === ВЫЧИСЛЕНИЕ ВРЕМЕНИ ОКОНЧАНИЯ УРОКОВ ===
-                // 1. Ищем номер самого последнего урока в этот день
-                const lastLessonNum = Math.max(...dayLessons.map(l => l.lesson_num));
-                
-                const scheduleForEnd = timeSchedules[day] || timeSchedules['default'];
-                const lastStartTime = scheduleForEnd[lastLessonNum];
-
-                // 3. Если время найдено, считаем окончание и рисуем плашку
-                if (lastStartTime) {
-                    const endTime = calculateEndTime(lastStartTime);
-                    const endDayDiv = document.createElement('div');
-                    
-                    // Выравниваем по правому краю и делаем отступ сверху
-                    endDayDiv.style.textAlign = 'right';
-                    endDayDiv.style.marginTop = '15px';
-                    endDayDiv.style.fontSize = '12px';
-                    endDayDiv.style.fontWeight = '600';
-                    endDayDiv.style.color = 'var(--text-muted)';
-                    
-                    // Используем класс time-badge, чтобы стиль совпадал со звонками!
-                    endDayDiv.innerHTML = `Уроки <span class="time-badge">ДО ${endTime}</span>`;
-                    
-                    // Добавляем эту надпись в самый низ карточки дня
-                    dayCard.appendChild(endDayDiv);
-                }
                     });
                 } else {
                     const emptyMsg = document.createElement('div');
@@ -372,6 +347,24 @@
                     emptyMsg.innerText = 'Нет расписания';
                     dayCard.appendChild(emptyMsg);
                 }
+                // === ВЫЧИСЛЕНИЕ ВРЕМЕНИ ОКОНЧАНИЯ УРОКОВ ===
+            const lastLessonNum = Math.max(...dayLessons.map(l => l.lesson_num));
+            const scheduleForEnd = timeSchedules[day] || timeSchedules['default'];
+            const lastStartTime = scheduleForEnd[lastLessonNum];
+
+            if (lastStartTime) {
+                const endTime = calculateEndTime(lastStartTime);
+                const endDayDiv = document.createElement('div');
+                
+                endDayDiv.style.textAlign = 'right';
+                endDayDiv.style.marginTop = '15px';
+                endDayDiv.style.fontSize = '12px';
+                endDayDiv.style.fontWeight = '600';
+                endDayDiv.style.color = 'var(--text-muted)';
+                
+                endDayDiv.innerHTML = `Уроки <span class="time-badge">ДО ${endTime}</span>`;
+                dayCard.appendChild(endDayDiv);
+            }
 
                 container.appendChild(dayCard);
             });
@@ -382,6 +375,7 @@
 </body>
 
 </html>
+
 
 
 
