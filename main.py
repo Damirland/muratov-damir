@@ -73,10 +73,10 @@ def get_main_keyboard(user_id):
     markup.add(btn_link)
 
     if is_admin(user_id):
-        btn1 = types.KeyboardButton("📝 Добавить день")
-        btn2 = types.KeyboardButton("📅 Основное расписание")
-        btn3 = types.KeyboardButton("🗑 Очистить день")
-        btn4 = types.KeyboardButton("💥 Очистить ВСЁ")
+        btn1 = types.KeyboardButton("📝 Добавить изменение")
+        btn2 = types.KeyboardButton("📅 Изменить основное расписание")
+        btn3 = types.KeyboardButton("🗑 Очистить изменения дня")
+        btn4 = types.KeyboardButton("💥 Сбросить все до основного расписания")
         markup.add(btn1, btn2, btn3, btn4)
         if user_id == SUPER_ADMIN_ID:
             markup.add(types.KeyboardButton("👑 Добавить админа"), types.KeyboardButton("👥 Список админов"))
@@ -123,21 +123,21 @@ def show_statistics(message):
     bot.send_message(message.chat.id, text, parse_mode='Markdown')
 
 # 1. Логика ДОБАВЛЕНИЯ ДНЯ
-@bot.message_handler(func=lambda m: m.text == "📝 Добавить день")
+@bot.message_handler(func=lambda m: m.text == "📝 Добавить изменение")
 def ask_day_for_add(message):
     if not is_admin(message.from_user.id): return
     msg = bot.send_message(message.chat.id, "На какой день добавляем изменения?", reply_markup=get_days_keyboard())
     bot.register_next_step_handler(msg, process_day_selection, "add")
 
 # 2. Логика ОСНОВНОГО РАСПИСАНИЯ
-@bot.message_handler(func=lambda m: m.text == "📅 Основное расписание")
+@bot.message_handler(func=lambda m: m.text == "📅 Изменить основное расписание")
 def ask_day_for_main(message):
     if not is_admin(message.from_user.id): return
     msg = bot.send_message(message.chat.id, "Для какого дня задаем ОСНОВНОЕ расписание?", reply_markup=get_days_keyboard())
     bot.register_next_step_handler(msg, process_day_selection, "main")
 
 # 3. Логика ОЧИСТКИ
-@bot.message_handler(func=lambda m: m.text == "🗑 Очистить день")
+@bot.message_handler(func=lambda m: m.text == "🗑 Очистить изменения дня")
 def ask_day_for_clear(message):
     if not is_admin(message.from_user.id): return
     msg = bot.send_message(message.chat.id, "Какой день очистить?", reply_markup=get_days_keyboard())
@@ -225,7 +225,7 @@ def execute_clear(message, day):
     conn.close()
     bot.send_message(message.chat.id, f"🗑 Изменения на {day} удалены.", reply_markup=get_main_keyboard(message.from_user.id))
 
-@bot.message_handler(func=lambda m: m.text == "💥 Очистить ВСЁ")
+@bot.message_handler(func=lambda m: m.text == "💥 Сбросить все до основного расписания")
 def clear_all(message):
     if not is_admin(message.from_user.id): return
     conn = get_db_connection()
