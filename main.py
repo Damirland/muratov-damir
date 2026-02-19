@@ -157,7 +157,7 @@ def send_welcome(message):
     conn.commit()
     c.close()
     conn.close()
-    bot.reply_to(message, "Привет! Выбери действие:", reply_markup=get_main_keyboard(message.from_user.id))
+    bot.reply_to(message, "Привет! Если ты модератор, то вот небольшой экскурс: https://drive.google.com/file/d/1jSJo-uAnKLxUjeBJofIj9dZh9mW2Xt1M/view?usp=drivesdk", reply_markup=get_main_keyboard(message.from_user.id))
 
 @bot.message_handler(func=lambda m: m.text == "🌐 Ссылка на сайт")
 def send_site_link(message):
