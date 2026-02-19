@@ -36,6 +36,37 @@
         .creator-badge { position: absolute; top: 20px; right: 20px; font-size: 14px; font-weight: 600; color: var(--text-muted); text-decoration: none; background: var(--card-bg); padding: 6px 12px; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: all 0.3s ease; }
         .creator-badge:hover { color: var(--primary-blue); box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2); transform: translateY(-2px); }
         @media (max-width: 600px) { .creator-badge { position: relative; display: block; top: 0; right: 0; width: max-content; margin: 0 auto 15px auto; text-align: center; } h1 { margin-top: 5px; } }
+        /* Кнопка мгновенного обновления */
+        .refresh-btn {
+            background: var(--card-bg);
+            border: 2px solid #eef2f7;
+            color: var(--primary-blue);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-left: 10px;
+        }
+
+        .refresh-btn:hover {
+            border-color: var(--primary-blue);
+            color: white;
+            background: var(--primary-blue);
+            transform: translateY(-2px);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.9);
+        }
+
+        .refresh-btn.spinning svg {
+            animation: spin 1s linear infinite;
+        }
     </style>
 </head>
 <body>
@@ -43,10 +74,14 @@
 
     <h1>Домашние задания 8А</h1>
     
-    <div style="text-align: center; margin-bottom: 20px;">
-        <a href="/" style="text-decoration: none; padding: 10px; color: #007bff;">Дневник</a> | 
+    <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 20px;">
+        <a style="padding: 10px; color: #7f8c8d; font-weight: bold;">Дневник</a> | 
         <a href="/main" style="text-decoration: none; padding: 10px; color: #007bff;">Основное расписание</a> |
-        <span style="padding: 10px; color: #7f8c8d; font-weight: bold;">Домашние задания</span>
+        <span href="/homework" style="text-decoration: none; padding: 10px; color: #007bff;">Домашние задания</span>
+        
+        <button class="refresh-btn" onclick="forceRefresh()" id="refreshBtn" title="Обновить данные">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
     </div>
 
     <div class="timetable" id="timetableContainer">
@@ -225,6 +260,34 @@
                 container.appendChild(dayCard);
             });
         }
+
+        // Функция мгновенного обновления таблицы
+        async function forceRefresh() {
+            const btn = document.getElementById('refreshBtn');
+            btn.classList.add('spinning'); // Запускаем анимацию кручения кнопки
+            
+            // Показываем красивый кружок загрузки на месте таблицы
+            const container = document.getElementById('timetableContainer');
+            container.innerHTML = `
+                <div class="loader-container">
+                    <div class="spinner"></div>
+                    <div>Обновление...</div>
+                </div>
+            `;
+            
+            // Умная проверка: на какой странице мы находимся?
+            if (typeof fetchHomework === 'function') {
+                await fetchHomework(); // Обновляем домашку
+            } else {
+                await fetchTimetable(); // Обновляем расписание
+            }
+            
+            // Останавливаем кручение кнопки через полсекунды (чтобы было плавно)
+            setTimeout(() => {
+                btn.classList.remove('spinning');
+            }, 500);
+        }
+
         window.onload = fetchHomework;
     </script>
 </body>
