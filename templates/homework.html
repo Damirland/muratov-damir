@@ -21,8 +21,8 @@
         .homework-box {
             margin-top: 10px;
             padding: 8px 12px;
-            background: #fff8d6;
-            border-left: 4px solid #fcc419;
+            background: #d6fcff;
+            border-left: 4px solid rgb(68, 180, 245);
             border-radius: 6px;
             font-size: 14px;
             color: #5c4b00;
@@ -113,7 +113,7 @@
                     // Если на этот день уже съехалась какая-то другая домашка по этому предмету, 
                     // мы не удаляем старую, а аккуратно склеиваем их!
                     if (hwMap[key]) {
-                        hwMap[key] += `<br><br><span style="color:#025cbd; font-size:12px;">+ Перенесенное:</span><br>` + hw.task;
+                        hwMap[key] += `<br><br><span style="color:#b08d00; font-size:12px;">+ Перенесенное:</span><br>` + hw.task;
                     } else {
                         hwMap[key] = hw.task;
                     }
