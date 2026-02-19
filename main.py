@@ -356,6 +356,7 @@ def auto_clear_schedule():
     except Exception as e:
         print(f"Ошибка при автоочистке: {e}")
 
+# --- ЛОГИКА ДОМАШНИХ ЗАДАНИЙ ---
 @bot.message_handler(func=lambda m: m.text == "📚 Управление домашкой")
 def ask_hw_day(message):
     if not is_admin(message.from_user.id): return
@@ -368,13 +369,13 @@ def process_hw_day(message):
         bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
         return
 
-    # Достаем список предметов на этот день, чтобы вывести их кнопками
+    # Достаем расписание на этот день для подсказки
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT subject FROM lessons WHERE class_name='8А' AND day=%s", (day,))
+    c.execute("SELECT lesson_num, subject FROM lessons WHERE class_name='8А' AND day=%s ORDER BY lesson_num", (day,))
     subs = c.fetchall()
     if not subs: # Если временных нет, берем из основного
-        c.execute("SELECT subject FROM main_lessons WHERE class_name='8А' AND day=%s", (day,))
+        c.execute("SELECT lesson_num, subject FROM main_lessons WHERE class_name='8А' AND day=%s ORDER BY lesson_num", (day,))
         subs = c.fetchall()
     c.close()
     conn.close()
@@ -383,40 +384,74 @@ def process_hw_day(message):
         bot.send_message(message.chat.id, f"На {day} нет уроков в базе!", reply_markup=get_main_keyboard(message.from_user.id))
         return
 
-    unique_subs = sorted(list(set([s[0] for s in subs])))
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    for sub in unique_subs:
-        markup.add(types.KeyboardButton(sub))
-    markup.add(types.KeyboardButton("❌ Отмена"))
-
-    msg = bot.send_message(message.chat.id, "Выбери предмет:", reply_markup=markup)
-    bot.register_next_step_handler(msg, process_hw_subject, day)
-
-def process_hw_subject(message, day):
-    subject = message.text
-    if subject == "❌ Отмена":
-        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
-        return
+    # Формируем красивый список уроков
+    schedule_text = "\n".join([f"{row[0]}. {row[1]}" for row in subs])
     
-    msg = bot.send_message(message.chat.id, f"Напиши задание по предмету **{subject}** на {day}:\n*(Чтобы удалить старую домашку, просто напиши минус -)*", parse_mode="Markdown", reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(msg, save_hw, day, subject)
+    instructions = (
+        f"📅 **Расписание на {day}:**\n{schedule_text}\n\n"
+        f"Напиши домашнее задание **ОДНИМ сообщением** в формате:\n\n"
+        f"`Алгебра: номера 123, 124`\n"
+        f"`Химия: параграф 5`\n\n"
+        f"*(Предмет пиши так же, как в расписании. Чтобы удалить домашку для отдельного предмета, напиши `Предмет: -`)*"
+    )
 
-def save_hw(message, day, subject):
-    task = message.text
-    if task == "❌ Отмена":
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(types.KeyboardButton("❌ Отмена"))
+    msg = bot.send_message(message.chat.id, instructions, parse_mode="Markdown", reply_markup=markup)
+    bot.register_next_step_handler(msg, save_multiple_hw, day)
+
+def save_multiple_hw(message, day):
+    if message.text == "❌ Отмена":
         bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
         return
+
+    lines = message.text.strip().split('\n')
+    saved_count = 0
+    errors = []
 
     conn = get_db_connection()
     c = conn.cursor()
-    # UPSERT магия: если домашка уже есть - обновляем, если нет - создаем
-    c.execute("""INSERT INTO homework (day, subject, task) VALUES (%s, %s, %s) 
-                 ON CONFLICT (day, subject) DO UPDATE SET task = EXCLUDED.task""", 
-              (day, subject, task))
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Проверяем, есть ли двоеточие в строке
+        if ':' not in line:
+            errors.append(f"Пропущено (нет двоеточия): `{line}`")
+            continue
+
+        # Разбиваем по первому двоеточию
+        parts = line.split(':', 1)
+        subject = parts[0].strip()
+        task = parts[1].strip()
+
+        # Если модератор написал домашку в кавычках ("домашка"), убираем их для красоты
+        if task.startswith('"') and task.endswith('"'):
+            task = task[1:-1].strip()
+        elif task.startswith("'") and task.endswith("'"):
+            task = task[1:-1].strip()
+
+        if not subject or not task:
+            errors.append(f"Пропущено (пустое значение): `{line}`")
+            continue
+
+        # UPSERT магия: обновляем только те предметы, которые прислали. 
+        # Остальные предметы на этот день в базе не трогаются!
+        c.execute("""INSERT INTO homework (day, subject, task) VALUES (%s, %s, %s) 
+                     ON CONFLICT (day, subject) DO UPDATE SET task = EXCLUDED.task""", 
+                  (day, subject, task))
+        saved_count += 1
+
     conn.commit()
     c.close()
     conn.close()
-    bot.send_message(message.chat.id, f"✅ Домашка по {subject} сохранена!", reply_markup=get_main_keyboard(message.from_user.id))
+
+    response = f"✅ Успешно сохранено заданий: **{saved_count}** на {day}."
+    if errors:
+        response += "\n\n⚠️ **Ошибки (эти строки не сохранились):**\n" + "\n".join(errors)
+
+    bot.send_message(message.chat.id, response, parse_mode="Markdown", reply_markup=get_main_keyboard(message.from_user.id))
 
 # --- ДОБАВЛЕНИЕ НОВОГО АДМИНА ---
 @bot.message_handler(func=lambda m: m.text == "👑 Добавить админа")
