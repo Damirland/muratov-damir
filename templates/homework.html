@@ -196,7 +196,11 @@
                 const isMobile = window.innerWidth <= 600;
 
                 if (isToday) dayCard.classList.add('today');
-                if (isMobile && !isToday) dayCard.classList.add('collapsed');
+                
+                // На телефонах сворачиваем ВСЕ дни с домашкой
+                if (isMobile) {
+                    dayCard.classList.add('collapsed');
+                }
 
                 dayCard.innerHTML = `
                     <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">

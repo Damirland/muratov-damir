@@ -372,8 +372,8 @@
 
                 if (isToday) dayCard.classList.add('today');
                 
-                // На телефонах сворачиваем все дни, КРОМЕ сегодняшнего
-                if (isMobile && !isToday) {
+                // На телефонах сворачиваем ВООБЩЕ ВСЕ дни
+                if (isMobile) {
                     dayCard.classList.add('collapsed');
                 }
 
