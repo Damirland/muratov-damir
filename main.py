@@ -418,7 +418,7 @@ def save_multiple_hw(message, day):
         return
 
     if text == "❌ Отмена":
-        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.fromuser.id))
+        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
         return
 
     # --- ЗАГРУЗКА ФОТО В ОБЛАКО ---
