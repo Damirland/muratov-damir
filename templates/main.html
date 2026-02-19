@@ -336,23 +336,24 @@
 
                 if (isToday) dayCard.classList.add('today');
                 
-                // --- РАЗДЕЛЕНИЕ ЛОГИКИ: ТЕЛЕФОН vs ПК ---
+                // --- НАДЕЖНЫЙ АККОРДЕОН ДЛЯ ТЕЛЕФОНОВ ---
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'day-title';
+
                 if (isMobile) {
-                    dayCard.classList.add('collapsed'); // Сворачиваем на телефоне
-                    dayCard.innerHTML = `
-                        <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">
-                            <span>${day}</span>
-                            <span class="toggle-icon">▼</span>
-                        </div>
-                    `;
+                    dayCard.classList.add('collapsed');
+                    titleDiv.innerHTML = `<span>${day}</span><span class="toggle-icon">▼</span>`;
+                    
+                    // Железобетонный клик, который работает на любых мобилках
+                    titleDiv.onclick = function() {
+                        dayCard.classList.toggle('collapsed');
+                    };
                 } else {
-                    // На ПК просто текст, без клика и без стрелочки
-                    dayCard.innerHTML = `
-                        <div class="day-title" style="cursor: default;">
-                            <span>${day}</span>
-                        </div>
-                    `;
+                    titleDiv.style.cursor = 'default';
+                    titleDiv.innerHTML = `<span>${day}</span>`;
                 }
+                
+                dayCard.appendChild(titleDiv);
                 
                 const dayContent = document.createElement('div');
                 dayContent.className = 'day-content';
