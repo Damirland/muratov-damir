@@ -68,15 +68,58 @@
                 const lessons = await scheduleRes.json();
                 const hwData = await hwRes.json();
 
-                // Превращаем массив домашки в удобный словарь: hwMap['Понедельник_Алгебра'] = 'Учить стих'
+                const fullWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
                 const hwMap = {};
+
+                // Функция-помощник: проверяет, есть ли предмет в расписании в конкретный день
+                function subjectExistsOnDay(subject, day) {
+                    return lessons.some(l => l.day === day && l.subject === subject);
+                }
+
+                // === УМНАЯ СОРТИРОВКА И ПЕРЕНОС ДОМАШКИ ===
                 hwData.forEach(hw => {
-                    // Если админ ввел "-", мы домашки не показываем
-                    if (hw.task !== "-") {
-                        hwMap[`${hw.day}_${hw.subject}`] = hw.task;
+                    if (hw.task === "-") return; // Пропускаем удаленную домашку
+
+                    let startIndex = fullWeek.indexOf(hw.day);
+                    let targetDay = hw.day; // По умолчанию пытаемся поставить на тот день, на который задали
+
+                    if (startIndex !== -1) {
+                        let found = false;
+                        
+                        // 1. Ищем этот предмет начиная с заданного дня и двигаемся вперед до пятницы
+                        for (let i = startIndex; i < fullWeek.length; i++) {
+                            if (subjectExistsOnDay(hw.subject, fullWeek[i])) {
+                                targetDay = fullWeek[i];
+                                found = true;
+                                break;
+                            }
+                        }
+                        
+                        // 2. Если впереди урока нет (например, пятничную химию отменили), 
+                        // ищем его в начале недели (с понедельника), чтобы домашка не потерялась!
+                        if (!found) {
+                            for (let i = 0; i < startIndex; i++) {
+                                if (subjectExistsOnDay(hw.subject, fullWeek[i])) {
+                                    targetDay = fullWeek[i];
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Прикрепляем домашку к найденному (или оригинальному) дню
+                    const key = `${targetDay}_${hw.subject}`;
+                    
+                    // Если на этот день уже съехалась какая-то другая домашка по этому предмету, 
+                    // мы не удаляем старую, а аккуратно склеиваем их!
+                    if (hwMap[key]) {
+                        hwMap[key] += `<br><br><span style="color:#b08d00; font-size:12px;">+ Перенесенное:</span><br>` + hw.task;
+                    } else {
+                        hwMap[key] = hw.task;
                     }
                 });
 
+                // Передаем умную карту домашек в функцию отрисовки
                 renderHomework(lessons, hwMap);
             } catch (err) {
                 console.error("Ошибка:", err);
