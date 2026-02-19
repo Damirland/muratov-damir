@@ -292,27 +292,16 @@
             const container = document.getElementById('timetableContainer');
             container.innerHTML = '';
             
-            // --- РАСПИСАНИЕ ЗВОНКОВ ---
             const timeSchedules = {
-                'Вторник': {
-                    1: "08:40", 2: "09:30", 3: "10:25", 4: "11:20", 5: "12:10", 6: "13:00", 7: "13:50", 8: "14:45"
-                },
-                'default': { // Для Понедельника, Среды, Четверга, Пятницы и Субботы
-                    1: "08:00", 2: "08:50", 3: "09:45", 4: "10:40", 5: "11:35", 6: "12:25", 7: "13:15", 8: "14:10"
-                }
+                'Вторник': { 1: "08:40", 2: "09:30", 3: "10:25", 4: "11:20", 5: "12:10", 6: "13:00", 7: "13:50", 8: "14:45" },
+                'default': { 1: "08:00", 2: "08:50", 3: "09:45", 4: "10:40", 5: "11:35", 6: "12:25", 7: "13:15", 8: "14:10" }
             };
             
-            // --- РАСПИСАНИЕ ПЕРЕМЕН (в минутах ПОСЛЕ урока) ---
             const breaks = {
-                'Вторник': {
-                    1: 10, 2: 15, 3: 15, 4: 10, 5: 10, 6: 10, 7: 15, 8: 10, 9: 10, 10: 5, 11: 5
-                },
-                'default': { 
-                    1: 10, 2: 15, 3: 15, 4: 15, 5: 10, 6: 10, 7: 15, 8: 15, 9: 10, 10: 5, 11: 5
-                }
+                'Вторник': { 1: 10, 2: 15, 3: 15, 4: 10, 5: 10, 6: 10, 7: 15, 8: 10, 9: 10, 10: 5, 11: 5 },
+                'default': { 1: 10, 2: 15, 3: 15, 4: 15, 5: 10, 6: 10, 7: 15, 8: 15, 9: 10, 10: 5, 11: 5 }
             };
             
-            // Функция для прибавления 40 минут к началу урока
             function calculateEndTime(startTime) {
                 if (!startTime) return "";
                 let parts = startTime.split(':');
@@ -347,17 +336,23 @@
 
                 if (isToday) dayCard.classList.add('today');
                 
-                // На телефонах сворачиваем все дни, КРОМЕ сегодняшнего
-                if (isMobile && !isToday) {
-                    dayCard.classList.add('collapsed');
+                // --- РАЗДЕЛЕНИЕ ЛОГИКИ: ТЕЛЕФОН vs ПК ---
+                if (isMobile) {
+                    dayCard.classList.add('collapsed'); // Сворачиваем на телефоне
+                    dayCard.innerHTML = `
+                        <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>${day}</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                    `;
+                } else {
+                    // На ПК просто текст, без клика и без стрелочки
+                    dayCard.innerHTML = `
+                        <div class="day-title" style="cursor: default;">
+                            <span>${day}</span>
+                        </div>
+                    `;
                 }
-
-                dayCard.innerHTML = `
-                    <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">
-                        <span>${day}</span>
-                        <span class="toggle-icon">▼</span>
-                    </div>
-                `;
                 
                 const dayContent = document.createElement('div');
                 dayContent.className = 'day-content';
@@ -416,7 +411,7 @@
                 } else {
                     const emptyMsg = document.createElement('div');
                     emptyMsg.className = 'empty-day-msg';
-                    // 🚨 ВНИМАНИЕ: Для файла index.html напиши тут 'Основное расписание'
+                    // ⚠️ ВНИМАНИЕ: Для файла index.html напиши тут 'Основное расписание'
                     emptyMsg.innerText = 'Нет расписания'; 
                     dayContent.appendChild(emptyMsg);
                 }
