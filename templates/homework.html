@@ -197,17 +197,23 @@
 
                 if (isToday) dayCard.classList.add('today');
                 
-                // На телефонах сворачиваем ВСЕ дни с домашкой
+                // --- РАЗДЕЛЕНИЕ ЛОГИКИ: ТЕЛЕФОН vs ПК ---
                 if (isMobile) {
-                    dayCard.classList.add('collapsed');
+                    dayCard.classList.add('collapsed'); // На телефонах сворачиваем
+                    dayCard.innerHTML = `
+                        <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>${day}</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                    `;
+                } else {
+                    // На ПК оставляем открытым, убираем стрелочку и запрещаем кликать
+                    dayCard.innerHTML = `
+                        <div class="day-title" style="cursor: default;">
+                            <span>${day}</span>
+                        </div>
+                    `;
                 }
-
-                dayCard.innerHTML = `
-                    <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">
-                        <span>${day}</span>
-                        <span class="toggle-icon">▼</span>
-                    </div>
-                `;
                 
                 const dayContent = document.createElement('div');
                 dayContent.className = 'day-content';

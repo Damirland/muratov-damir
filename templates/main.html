@@ -249,6 +249,34 @@
         .refresh-btn.spinning svg {
             animation: spin 1s linear infinite;
         }
+
+        /* --- СТИЛИ ДЛЯ СВОРАЧИВАНИЯ КАРТОЧЕК --- */
+        .day-title {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none; /* Чтобы текст не выделялся при случайном двойном клике */
+        }
+        
+        .toggle-icon {
+            font-size: 14px;
+            transition: transform 0.3s ease;
+            color: var(--text-muted);
+        }
+
+        .day-content {
+            display: block;
+        }
+
+        /* Если у карточки есть класс collapsed, прячем контент и крутим стрелочку */
+        .day-card.collapsed .day-content {
+            display: none;
+        }
+
+        .day-card.collapsed .toggle-icon {
+            transform: rotate(90deg); /* Поворачиваем стрелочку */
+        }
         
     </style>
 </head>
