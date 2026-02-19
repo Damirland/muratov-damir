@@ -407,7 +407,7 @@ def save_multiple_hw(message, day):
     lines = message.text.strip().split('\n')
     saved_count = 0
     errors = []
-    moved_info = [] # Список для красивого отчета о переносах
+    moved_info = []
 
     full_week = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница']
     
@@ -422,18 +422,15 @@ def save_multiple_hw(message, day):
 
     schedule = {d: set() for d in full_week}
     
-    # Заполняем основным расписанием
     for d, s in main_lessons:
         if d in schedule:
             schedule[d].add(s.strip().lower())
 
-    # Если на какой-то день есть временные изменения, они перекрывают основные
     days_with_temp = set([r[0] for r in temp_lessons])
     for d in days_with_temp:
         if d in schedule:
-            schedule[d] = set() # Очищаем день от основного расписания
+            schedule[d] = set()
 
-    # Добавляем временные уроки
     for d, s in temp_lessons:
         if d in schedule:
             schedule[d].add(s.strip().lower())
@@ -452,7 +449,6 @@ def save_multiple_hw(message, day):
         original_subject = parts[0].strip()
         task = parts[1].strip()
 
-        # Убираем лишние кавычки
         if task.startswith('"') and task.endswith('"'):
             task = task[1:-1].strip()
         elif task.startswith("'") and task.endswith("'"):
@@ -462,46 +458,58 @@ def save_multiple_hw(message, day):
             errors.append(f"Пропущено (пустое значение): `{line}`")
             continue
 
-        # --- 3. УМНЫЙ ПЕРЕНОС ПЕРЕД СОХРАНЕНИЕМ В БАЗУ ---
+        # --- 3. УМНЫЙ ПЕРЕНОС ---
         norm_sub = original_subject.lower()
         target_day = day
         
         if day in full_week:
             start_index = full_week.index(day)
             
-            # Если предмета нет в выбранный день
             if norm_sub not in schedule[target_day]:
                 found = False
-                # Ищем вперед
                 for i in range(start_index, len(full_week)):
                     if norm_sub in schedule[full_week[i]]:
                         target_day = full_week[i]
                         found = True
                         break
-                # Если не нашли впереди, ищем с начала недели
                 if not found:
                     for i in range(0, start_index):
                         if norm_sub in schedule[full_week[i]]:
                             target_day = full_week[i]
                             break
                 
-                # Если день изменился, записываем в отчет
-                if target_day != day:
+                # Пишем о переносе только если это не удаление (чтобы не путать)
+                if target_day != day and task != '-' and task != '—':
                     moved_info.append(f"🔄 **{original_subject}** перенесен(а) на **{target_day}**")
 
-        # --- 4. СОХРАНЯЕМ В БАЗУ НА ПРАВИЛЬНЫЙ ДЕНЬ ---
-        # Обрати внимание: сохраняем в target_day, а не в изначальный day!
-        c.execute("""INSERT INTO homework (day, subject, task) VALUES (%s, %s, %s) 
-                     ON CONFLICT (day, subject) DO UPDATE SET task = EXCLUDED.task""", 
-                  (target_day, original_subject, task))
-        saved_count += 1
+        # --- 4. СОХРАНЯЕМ ИЛИ УДАЛЯЕМ ---
+        if task == '-' or task == '—':
+            # 1. Удаляем с целевого дня (куда система думает, что оно перенеслось)
+            c.execute("DELETE FROM homework WHERE day=%s AND subject=%s", (target_day, original_subject))
+            # 2. Удаляем с изначального дня (на всякий случай)
+            c.execute("DELETE FROM homework WHERE day=%s AND subject=%s", (day, original_subject))
+            
+            # 3. УДАЛЕНИЕ "ПРИЗРАКОВ": ищем все домашки по этому предмету
+            c.execute("SELECT day FROM homework WHERE subject=%s", (original_subject,))
+            for (hw_day,) in c.fetchall():
+                # Если в этот день урока больше нет в расписании — смело стираем зависшую домашку!
+                if norm_sub not in schedule.get(hw_day, set()):
+                    c.execute("DELETE FROM homework WHERE day=%s AND subject=%s", (hw_day, original_subject))
+                    
+            saved_count += 1
+        else:
+            # Обычное сохранение/обновление домашки
+            c.execute("""INSERT INTO homework (day, subject, task) VALUES (%s, %s, %s) 
+                         ON CONFLICT (day, subject) DO UPDATE SET task = EXCLUDED.task""", 
+                      (target_day, original_subject, task))
+            saved_count += 1
 
     conn.commit()
     c.close()
     conn.close()
 
-    # --- 5. ФОРМИРУЕМ ОТВЕТ В ТЕЛЕГРАМ ---
-    response = f"✅ Успешно сохранено заданий: **{saved_count}**."
+    # --- 5. ФОРМИРУЕМ ОТВЕТ ---
+    response = f"✅ Успешно обработано заданий: **{saved_count}**."
     
     if moved_info:
         response += "\n\n" + "\n".join(moved_info)
