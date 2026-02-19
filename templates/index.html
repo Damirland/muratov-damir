@@ -316,16 +316,17 @@
         function renderTimetable(lessons) {
             const container = document.getElementById('timetableContainer');
             container.innerHTML = '';
+            
             // --- РАСПИСАНИЕ ЗВОНКОВ ---
-            // Впиши сюда точное время начала уроков из своих таблиц!
             const timeSchedules = {
                 'Вторник': {
-    1: "08:40", 2: "09:30", 3: "10:25", 4: "11:20", 5: "12:10", 6: "13:00", 7: "13:50", 8: "14:45"
-},
-'default': { // Для Понедельника, Среды, Четверга, Пятницы и Субботы
-    1: "08:00", 2: "08:50", 3: "09:45", 4: "10:40", 5: "11:35", 6: "12:25", 7: "13:15", 8: "14:10"
-}
+                    1: "08:40", 2: "09:30", 3: "10:25", 4: "11:20", 5: "12:10", 6: "13:00", 7: "13:50", 8: "14:45"
+                },
+                'default': { // Для Понедельника, Среды, Четверга, Пятницы и Субботы
+                    1: "08:00", 2: "08:50", 3: "09:45", 4: "10:40", 5: "11:35", 6: "12:25", 7: "13:15", 8: "14:10"
+                }
             };
+            
             // --- РАСПИСАНИЕ ПЕРЕМЕН (в минутах ПОСЛЕ урока) ---
             const breaks = {
                 'Вторник': {
@@ -335,6 +336,7 @@
                     1: 10, 2: 15, 3: 15, 4: 15, 5: 10, 6: 10, 7: 15, 8: 15, 9: 10, 10: 5, 11: 5
                 }
             };
+            
             // Функция для прибавления 40 минут к началу урока
             function calculateEndTime(startTime) {
                 if (!startTime) return "";
@@ -342,11 +344,10 @@
                 let hours = parseInt(parts[0], 10);
                 let minutes = parseInt(parts[1], 10);
                 
-                minutes += 40; // Прибавляем 40 минут (длительность урока)
-                hours += Math.floor(minutes / 60); // Если минут больше 60, добавляем час
-                minutes = minutes % 60; // Оставляем правильный остаток минут
+                minutes += 40; 
+                hours += Math.floor(minutes / 60); 
+                minutes = minutes % 60; 
                 
-                // Добавляем нули спереди (чтобы было 09:05, а не 9:5)
                 let hStr = hours.toString().padStart(2, '0');
                 let mStr = minutes.toString().padStart(2, '0');
                 return `${hStr}:${mStr}`;
@@ -367,7 +368,7 @@
                 dayCard.className = 'day-card';
                 
                 const isToday = day === capitalizedToday;
-                const isMobile = window.innerWidth <= 600; // Проверяем, телефон ли это
+                const isMobile = window.innerWidth <= 600;
 
                 if (isToday) dayCard.classList.add('today');
                 
@@ -376,7 +377,6 @@
                     dayCard.classList.add('collapsed');
                 }
 
-                // Заголовок теперь кликабельный и имеет стрелочку
                 dayCard.innerHTML = `
                     <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">
                         <span>${day}</span>
@@ -384,7 +384,6 @@
                     </div>
                 `;
                 
-                // Создаем "мешок" (контейнер), в который сложим все уроки
                 const dayContent = document.createElement('div');
                 dayContent.className = 'day-content';
                 
@@ -434,21 +433,19 @@
                             </div>
                             <div class="lesson-main">
                                 <span class="lesson-subject">${lesson.subject}</span>
-                                <span class="lesson-room">${lesson.room}</span>
+                                <span class="lesson-room">${lesson.room || ''}</span>
                             </div>
                         `;
-                        // Кладем урок в скрываемый контейнер!
                         dayContent.appendChild(lessonDiv);
                     });
                 } else {
                     const emptyMsg = document.createElement('div');
                     emptyMsg.className = 'empty-day-msg';
-                    /* ВНИМАНИЕ: Для index.html напиши тут 'Основное расписание', а для main.html - 'Нет расписания' */
+                    // 🚨 ВНИМАНИЕ: Для файла index.html напиши тут 'Основное расписание'
                     emptyMsg.innerText = 'Основное расписание'; 
                     dayContent.appendChild(emptyMsg);
                 }
 
-                // Время окончания уроков
                 if (dayLessons && dayLessons.length > 0) {
                     const lastLessonNum = Math.max(...dayLessons.map(l => l.lesson_num));
                     const scheduleForEnd = timeSchedules[day] || timeSchedules['default'];
@@ -463,39 +460,11 @@
                         endDayDiv.style.fontWeight = '600';
                         endDayDiv.style.color = 'var(--text-muted)';
                         endDayDiv.innerHTML = `Уроки <span class="time-badge">ДО ${endTime}</span>`;
-                        dayContent.appendChild(endDayDiv); // Тоже прячем в контейнер
+                        dayContent.appendChild(endDayDiv); 
                     }
                 }
 
-                // Собираем матрешку: Контент -> Карточка -> Главный контейнер
                 dayCard.appendChild(dayContent);
-                container.appendChild(dayCard);
-            });
-                } else {
-                    const emptyMsg = document.createElement('div');
-                    emptyMsg.className = 'empty-day-msg';
-                    emptyMsg.innerText = 'Основное расписание';
-                    dayCard.appendChild(emptyMsg);
-                }
-                // === ВЫЧИСЛЕНИЕ ВРЕМЕНИ ОКОНЧАНИЯ УРОКОВ ===
-            const lastLessonNum = Math.max(...dayLessons.map(l => l.lesson_num));
-            const scheduleForEnd = timeSchedules[day] || timeSchedules['default'];
-            const lastStartTime = scheduleForEnd[lastLessonNum];
-
-            if (lastStartTime) {
-                const endTime = calculateEndTime(lastStartTime);
-                const endDayDiv = document.createElement('div');
-                
-                endDayDiv.style.textAlign = 'right';
-                endDayDiv.style.marginTop = '15px';
-                endDayDiv.style.fontSize = '12px';
-                endDayDiv.style.fontWeight = '600';
-                endDayDiv.style.color = 'var(--text-muted)';
-                
-                endDayDiv.innerHTML = `Уроки <span class="time-badge">ДО ${endTime}</span>`;
-                dayCard.appendChild(endDayDiv);
-            }
-
                 container.appendChild(dayCard);
             });
         }
