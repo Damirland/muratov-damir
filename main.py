@@ -126,7 +126,7 @@ def get_main_keyboard(user_id):
         btn1 = types.KeyboardButton("📝 Добавить изменение")
         btn2 = types.KeyboardButton("📅 Изменить основное расписание")
         btn3 = types.KeyboardButton("🗑 Очистить изменения дня")
-        btn4 = types.KeyboardButton("💥 Сбросить все")
+        btn4 = types.KeyboardButton("💥 Сбросить все до основного расписания")
         btn5 = types.KeyboardButton("📚 Управление домашкой") # Новая кнопка
         markup.add(btn1, btn2, btn3, btn4, btn5)
         if user_id == SUPER_ADMIN_ID:
