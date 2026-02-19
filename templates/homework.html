@@ -67,6 +67,34 @@
         .refresh-btn.spinning svg {
             animation: spin 1s linear infinite;
         }
+
+        /* --- СТИЛИ ДЛЯ СВОРАЧИВАНИЯ КАРТОЧЕК --- */
+        .day-title {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none; /* Чтобы текст не выделялся при случайном двойном клике */
+        }
+        
+        .toggle-icon {
+            font-size: 14px;
+            transition: transform 0.3s ease;
+            color: var(--text-muted);
+        }
+
+        .day-content {
+            display: block;
+        }
+
+        /* Если у карточки есть класс collapsed, прячем контент и крутим стрелочку */
+        .day-card.collapsed .day-content {
+            display: none;
+        }
+
+        .day-card.collapsed .toggle-icon {
+            transform: rotate(90deg); /* Поворачиваем стрелочку */
+        }
     </style>
 </head>
 <body>
@@ -163,8 +191,22 @@
             fullWeek.forEach(day => {
                 const dayCard = document.createElement('div');
                 dayCard.className = 'day-card';
-                if (day === capitalizedToday) dayCard.classList.add('today');
-                dayCard.innerHTML = `<div class="day-title">${day}</div>`;
+                
+                const isToday = day === capitalizedToday;
+                const isMobile = window.innerWidth <= 600;
+
+                if (isToday) dayCard.classList.add('today');
+                if (isMobile && !isToday) dayCard.classList.add('collapsed');
+
+                dayCard.innerHTML = `
+                    <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <span>${day}</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                `;
+                
+                const dayContent = document.createElement('div');
+                dayContent.className = 'day-content';
                 
                 const dayLessons = daysData[day];
                 let hasHomeworkForDay = false;
@@ -195,7 +237,6 @@
                             const subjectColor = colors[lesson.subject] || '#ccc';
                             lessonDiv.style.borderLeftColor = subjectColor;
 
-                            // Создаем красивый блок с фото, если оно есть
                             let photoHtml = "";
                             if (hwObj.photo) {
                                 photoHtml = `
@@ -217,15 +258,16 @@
                                     ${photoHtml}
                                 </div>
                             `;
-                            dayCard.appendChild(lessonDiv);
+                            dayContent.appendChild(lessonDiv);
                         }
                     });
                 } 
                 
                 if (!hasHomeworkForDay) {
-                    dayCard.innerHTML += `<div style="text-align:center; color:#aaa; font-style:italic; padding: 20px 0;">Заданий нет 🥳</div>`;
+                    dayContent.innerHTML += `<div style="text-align:center; color:#aaa; font-style:italic; padding: 20px 0;">Заданий нет 🥳</div>`;
                 }
 
+                dayCard.appendChild(dayContent);
                 container.appendChild(dayCard);
             });
         }

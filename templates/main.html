@@ -249,6 +249,7 @@
         .refresh-btn.spinning svg {
             animation: spin 1s linear infinite;
         }
+        
     </style>
 </head>
 <body>
@@ -339,9 +340,28 @@
             fullWeek.forEach(day => {
                 const dayCard = document.createElement('div');
                 dayCard.className = 'day-card';
-                if (day === capitalizedToday) dayCard.classList.add('today');
+                
+                const isToday = day === capitalizedToday;
+                const isMobile = window.innerWidth <= 600; // Проверяем, телефон ли это
 
-                dayCard.innerHTML = `<div class="day-title">${day}</div>`;
+                if (isToday) dayCard.classList.add('today');
+                
+                // На телефонах сворачиваем все дни, КРОМЕ сегодняшнего
+                if (isMobile && !isToday) {
+                    dayCard.classList.add('collapsed');
+                }
+
+                // Заголовок теперь кликабельный и имеет стрелочку
+                dayCard.innerHTML = `
+                    <div class="day-title" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <span>${day}</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                `;
+                
+                // Создаем "мешок" (контейнер), в который сложим все уроки
+                const dayContent = document.createElement('div');
+                dayContent.className = 'day-content';
                 
                 const dayLessons = daysData[day];
 
@@ -352,67 +372,36 @@
                         lessonDiv.className = 'lesson';
                         
                         const colors = {
-    'Алгебра': '#4c6ef5', 
-    'Геометрия': '#4c6ef5',
-    'Вероятность и статистика': '#4c6ef5', 
-    'Дополнительная математика': '#4c6ef5',
-    'Решение задач по математике': '#4c6ef5',
-
-    'Русский язык': '#ff922b', 
-    'Литература': '#ff922b',
-    'Практикум по русскому языку': '#ff922b', 
-    'Функциональная грамотность': '#ff922b',
-
-    'Английский язык': '#e03131', 
-    'Английский язык / Информатика': '#c2255b',
-
-    'Информатика': '#845ef7', 
-    'Дополнительная информатика': '#7048e8',
-
-    'Физика': '#15aabf', 
-    'Химия': '#0ca678', 
-    'Биология': '#40c057',
-    'География': '#fab005',
-
-    'История': '#fa5252', 
-    'Обществознание': '#be4bdb', 
-    'Семьеведение': '#f06595',
-    'ОБЗР': '#5c940d',
-
-    'Физкультура': '#51cf66', 
-    'Музыка': '#fcc419', 
-    'Труд': '#a34e24',
-    'Классный час': '#20c997'
-};
+                            'Алгебра': '#4c6ef5', 'Геометрия': '#4c6ef5', 'Вероятность и статистика': '#4c6ef5', 
+                            'Дополнительная математика': '#4c6ef5', 'Решение задач по математике': '#4c6ef5',
+                            'Русский язык': '#ff922b', 'Литература': '#ff922b', 'Практикум по русскому языку': '#ff922b', 
+                            'Функциональная грамотность': '#ff922b', 'Английский язык': '#e03131', 
+                            'Английский язык / Информатика': '#c2255b', 'Информатика': '#845ef7', 
+                            'Дополнительная информатика': '#7048e8', 'Физика': '#15aabf', 'Химия': '#0ca678', 
+                            'Биология': '#40c057', 'География': '#fab005', 'История': '#fa5252', 
+                            'Обществознание': '#be4bdb', 'Семьеведение': '#f06595', 'ОБЗР': '#5c940d',
+                            'Физкультура': '#51cf66', 'Музыка': '#fcc419', 'Труд': '#a34e24', 'Классный час': '#20c997'
+                        };
                         const subjectColor = colors[lesson.subject] || '#ccc';
                         lessonDiv.style.borderLeftColor = subjectColor;
 
-                        // Определяем, какое расписание звонков брать (Вторник или обычное)
                         const currentTimes = timeSchedules[day] || timeSchedules['default'];
                         const startTime = currentTimes[lesson.lesson_num] || "";
                         let timeHtml = "";
                         if (startTime) {
-                            // Пропускаем начало урока через наш калькулятор (он прибавит 40 минут)
                             const lessonEndTime = calculateEndTime(startTime);
-                            // Выводим начало и конец через тире
                             timeHtml = `<span class="time-badge">${startTime} - ${lessonEndTime}</span>`;
                         }
 
-                        // === НОВОЕ: ВЫЧИСЛЯЕМ ПЕРЕМЕНУ ===
                         const currentBreaks = breaks[day] || breaks['default'];
                         const breakMins = currentBreaks[lesson.lesson_num];
-                        
-                        // Проверяем, последний ли это урок (чтобы не писать перемену перед уходом домой)
                         const isLastLesson = lesson.lesson_num === Math.max(...dayLessons.map(l => l.lesson_num));
                         
                         let breakHtml = "";
                         if (breakMins && !isLastLesson) {
-                            // Мы сделали это <span> и добавили margin-left: auto, 
-                            // чтобы перемена автоматически прижималась к правому краю строчки
                             breakHtml = `<span class="break-badge" style="margin-left: auto;">Перемена: ${breakMins} мин</span>`;
                         }
 
-                        // Новая структура: перемена переехала наверх, а кабинет вернулся на место
                         lessonDiv.innerHTML = `
                             <div class="lesson-time" style="display: flex; align-items: center;">
                                 Урок ${lesson.lesson_num} ${timeHtml}
@@ -423,8 +412,40 @@
                                 <span class="lesson-room">${lesson.room}</span>
                             </div>
                         `;
-                        dayCard.appendChild(lessonDiv);
+                        // Кладем урок в скрываемый контейнер!
+                        dayContent.appendChild(lessonDiv);
                     });
+                } else {
+                    const emptyMsg = document.createElement('div');
+                    emptyMsg.className = 'empty-day-msg';
+                    /* ВНИМАНИЕ: Для index.html напиши тут 'Основное расписание', а для main.html - 'Нет расписания' */
+                    emptyMsg.innerText = 'Нет расписания'; 
+                    dayContent.appendChild(emptyMsg);
+                }
+
+                // Время окончания уроков
+                if (dayLessons && dayLessons.length > 0) {
+                    const lastLessonNum = Math.max(...dayLessons.map(l => l.lesson_num));
+                    const scheduleForEnd = timeSchedules[day] || timeSchedules['default'];
+                    const lastStartTime = scheduleForEnd[lastLessonNum];
+
+                    if (lastStartTime) {
+                        const endTime = calculateEndTime(lastStartTime);
+                        const endDayDiv = document.createElement('div');
+                        endDayDiv.style.textAlign = 'right';
+                        endDayDiv.style.marginTop = '15px';
+                        endDayDiv.style.fontSize = '12px';
+                        endDayDiv.style.fontWeight = '600';
+                        endDayDiv.style.color = 'var(--text-muted)';
+                        endDayDiv.innerHTML = `Уроки <span class="time-badge">ДО ${endTime}</span>`;
+                        dayContent.appendChild(endDayDiv); // Тоже прячем в контейнер
+                    }
+                }
+
+                // Собираем матрешку: Контент -> Карточка -> Главный контейнер
+                dayCard.appendChild(dayContent);
+                container.appendChild(dayCard);
+            });
                 } else {
                     const emptyMsg = document.createElement('div');
                     emptyMsg.className = 'empty-day-msg';
