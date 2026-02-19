@@ -4,6 +4,8 @@ from flask import Flask, render_template, jsonify, request
 from telebot import types
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -85,6 +87,9 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS main_lessons 
                  (id SERIAL PRIMARY KEY, class_name TEXT, day TEXT, lesson_num INTEGER, subject TEXT, room TEXT)''')
     
+    c.execute('''CREATE TABLE IF NOT EXISTS homework 
+                 (id SERIAL PRIMARY KEY, day TEXT, subject TEXT, task TEXT, UNIQUE(day, subject))''')
+    
     conn.commit()
     c.close()
     conn.close()
@@ -121,8 +126,9 @@ def get_main_keyboard(user_id):
         btn1 = types.KeyboardButton("📝 Добавить изменение")
         btn2 = types.KeyboardButton("📅 Изменить основное расписание")
         btn3 = types.KeyboardButton("🗑 Очистить изменения дня")
-        btn4 = types.KeyboardButton("💥 Сбросить все до основного расписания")
-        markup.add(btn1, btn2, btn3, btn4)
+        btn4 = types.KeyboardButton("💥 Сбросить все")
+        btn5 = types.KeyboardButton("📚 Управление домашкой") # Новая кнопка
+        markup.add(btn1, btn2, btn3, btn4, btn5)
         if user_id == SUPER_ADMIN_ID:
             markup.add(types.KeyboardButton("👑 Добавить админа"), types.KeyboardButton("👥 Список админов"))
     return markup
@@ -322,6 +328,7 @@ def clear_all(message):
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM lessons WHERE class_name = '8А'")
+    c.execute("DELETE FROM homework")
     conn.commit()
     c.close()
     conn.close()
@@ -332,6 +339,7 @@ def auto_clear_schedule():
         conn = get_db_connection()
         c = conn.cursor()
         c.execute("DELETE FROM lessons WHERE class_name = '8А'")
+        c.execute("DELETE FROM homework")
         c.execute("SELECT user_id FROM admins")
         all_admins = c.fetchall()
         conn.commit()
@@ -347,6 +355,68 @@ def auto_clear_schedule():
                 pass
     except Exception as e:
         print(f"Ошибка при автоочистке: {e}")
+
+@bot.message_handler(func=lambda m: m.text == "📚 Управление домашкой")
+def ask_hw_day(message):
+    if not is_admin(message.from_user.id): return
+    msg = bot.send_message(message.chat.id, "На какой день задаем домашку?", reply_markup=get_days_keyboard())
+    bot.register_next_step_handler(msg, process_hw_day)
+
+def process_hw_day(message):
+    day = message.text
+    if day == "❌ Отмена":
+        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
+        return
+
+    # Достаем список предметов на этот день, чтобы вывести их кнопками
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT subject FROM lessons WHERE class_name='8А' AND day=%s", (day,))
+    subs = c.fetchall()
+    if not subs: # Если временных нет, берем из основного
+        c.execute("SELECT subject FROM main_lessons WHERE class_name='8А' AND day=%s", (day,))
+        subs = c.fetchall()
+    c.close()
+    conn.close()
+
+    if not subs:
+        bot.send_message(message.chat.id, f"На {day} нет уроков в базе!", reply_markup=get_main_keyboard(message.from_user.id))
+        return
+
+    unique_subs = sorted(list(set([s[0] for s in subs])))
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    for sub in unique_subs:
+        markup.add(types.KeyboardButton(sub))
+    markup.add(types.KeyboardButton("❌ Отмена"))
+
+    msg = bot.send_message(message.chat.id, "Выбери предмет:", reply_markup=markup)
+    bot.register_next_step_handler(msg, process_hw_subject, day)
+
+def process_hw_subject(message, day):
+    subject = message.text
+    if subject == "❌ Отмена":
+        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
+        return
+    
+    msg = bot.send_message(message.chat.id, f"Напиши задание по предмету **{subject}** на {day}:\n*(Чтобы удалить старую домашку, просто напиши минус -)*", parse_mode="Markdown", reply_markup=types.ReplyKeyboardRemove())
+    bot.register_next_step_handler(msg, save_hw, day, subject)
+
+def save_hw(message, day, subject):
+    task = message.text
+    if task == "❌ Отмена":
+        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
+        return
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    # UPSERT магия: если домашка уже есть - обновляем, если нет - создаем
+    c.execute("""INSERT INTO homework (day, subject, task) VALUES (%s, %s, %s) 
+                 ON CONFLICT (day, subject) DO UPDATE SET task = EXCLUDED.task""", 
+              (day, subject, task))
+    conn.commit()
+    c.close()
+    conn.close()
+    bot.send_message(message.chat.id, f"✅ Домашка по {subject} сохранена!", reply_markup=get_main_keyboard(message.from_user.id))
 
 # --- ДОБАВЛЕНИЕ НОВОГО АДМИНА ---
 @bot.message_handler(func=lambda m: m.text == "👑 Добавить админа")
@@ -504,6 +574,20 @@ def set_webhook():
         return "Вебхук успешно установлен! Бот готов к работе.", 200
     else:
         return "Ошибка установки вебхука.", 500
+
+@app.route('/homework')
+def homework_page():
+    return render_template('homework.html')
+
+@app.route('/api/homework')
+def get_homework_api():
+    conn = get_db_connection()
+    c = conn.cursor(cursor_factory=RealDictCursor)
+    c.execute("SELECT * FROM homework")
+    hw = c.fetchall()
+    c.close()
+    conn.close()
+    return jsonify(hw)
 
 if __name__ == '__main__':
     # На Render порт задается через переменную окружения (по умолчанию 5000)

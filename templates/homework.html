@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Домашние задания 8А</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+    <style>
+        /* Те же стили, что и на главной */
+        :root { --bg-color: #f0f2f5; --card-bg: #ffffff; --primary-blue: #007bff; --text-main: #2c3e50; --text-muted: #7f8c8d; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
+        h1 { text-align: center; margin-bottom: 30px; color: var(--primary-blue); }
+        .timetable { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; max-width: 1600px; margin: 0 auto; width: 100%; }
+        .day-card { background: var(--card-bg); border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); padding: 15px; flex: 1 1 200px; max-width: none; }
+        .day-title { font-size: 20px; font-weight: bold; color: var(--primary-blue); border-bottom: 2px solid #eef2f7; padding-bottom: 10px; margin-bottom: 15px; text-align: center; }
+        .lesson { padding: 12px; margin-bottom: 10px; border-radius: 10px; border-left: 5px solid #ccc; background: #f8f9fa; }
+        .lesson-main { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 600;}
+        .day-card.today { border: 2px solid var(--primary-blue); box-shadow: 0 0 20px rgba(0, 123, 255, 0.15); position: relative; }
+        
+        /* НОВЫЙ СТИЛЬ: Желтая карточка для домашки */
+        .homework-box {
+            margin-top: 10px;
+            padding: 8px 12px;
+            background: #fff8d6;
+            border-left: 4px solid #fcc419;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #5c4b00;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .loader-container { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px 0; color: var(--primary-blue); font-weight: 600; }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(0, 123, 255, 0.2); border-top: 4px solid var(--primary-blue); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .creator-badge { position: absolute; top: 20px; right: 20px; font-size: 14px; font-weight: 600; color: var(--text-muted); text-decoration: none; background: var(--card-bg); padding: 6px 12px; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: all 0.3s ease; }
+        .creator-badge:hover { color: var(--primary-blue); box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2); transform: translateY(-2px); }
+        @media (max-width: 600px) { .creator-badge { position: relative; display: block; top: 0; right: 0; width: max-content; margin: 0 auto 15px auto; text-align: center; } h1 { margin-top: 5px; } }
+    </style>
+</head>
+<body>
+    <a href="https://t.me/wisposhka" target="_blank" class="creator-badge">@wisposhka</a>
+
+    <h1>Домашние задания 8А</h1>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+        <a href="/" style="text-decoration: none; padding: 10px; color: #007bff;">Дневник</a> | 
+        <a href="/main" style="text-decoration: none; padding: 10px; color: #007bff;">Основное расписание</a> |
+        <span style="padding: 10px; color: #7f8c8d; font-weight: bold;">Домашние задания</span>
+    </div>
+
+    <div class="timetable" id="timetableContainer">
+        <div class="loader-container">
+            <div class="spinner"></div>
+            <div>Загрузка заданий...</div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchHomework() {
+            try {
+                // Запрашиваем ОДНОВРЕМЕННО и расписание, и домашку
+                const [scheduleRes, hwRes] = await Promise.all([
+                    fetch('/api/timetable'),
+                    fetch('/api/homework')
+                ]);
+                
+                const lessons = await scheduleRes.json();
+                const hwData = await hwRes.json();
+
+                // Превращаем массив домашки в удобный словарь: hwMap['Понедельник_Алгебра'] = 'Учить стих'
+                const hwMap = {};
+                hwData.forEach(hw => {
+                    // Если админ ввел "-", мы домашки не показываем
+                    if (hw.task !== "-") {
+                        hwMap[`${hw.day}_${hw.subject}`] = hw.task;
+                    }
+                });
+
+                renderHomework(lessons, hwMap);
+            } catch (err) {
+                console.error("Ошибка:", err);
+                document.getElementById('timetableContainer').innerHTML = '<div class="loader-container" style="color: #e74c3c;">❌ Ошибка загрузки.</div>';
+            }
+        }
+
+        function renderHomework(lessons, hwMap) {
+            const container = document.getElementById('timetableContainer');
+            container.innerHTML = '';
+            
+            const daysData = {};
+            lessons.forEach(lesson => {
+                if (!daysData[lesson.day]) daysData[lesson.day] = [];
+                daysData[lesson.day].push(lesson);
+            });
+
+            const fullWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
+            const todayName = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(new Date());
+            const capitalizedToday = todayName.charAt(0).toUpperCase() + todayName.slice(1);
+
+            fullWeek.forEach(day => {
+                const dayCard = document.createElement('div');
+                dayCard.className = 'day-card';
+                if (day === capitalizedToday) dayCard.classList.add('today');
+                dayCard.innerHTML = `<div class="day-title">${day}</div>`;
+                
+                const dayLessons = daysData[day];
+                let hasHomeworkForDay = false; // Флаг, есть ли вообще домашка в этот день
+
+                if (dayLessons && dayLessons.length > 0) {
+                    dayLessons.sort((a, b) => a.lesson_num - b.lesson_num);
+                    dayLessons.forEach(lesson => {
+                        // Ищем домашку по ключу "День_Предмет"
+                        const task = hwMap[`${day}_${lesson.subject}`];
+                        
+                        // Если домашка есть, рисуем карточку урока
+                        if (task) {
+                            hasHomeworkForDay = true;
+                            const lessonDiv = document.createElement('div');
+                            lessonDiv.className = 'lesson';
+                            lessonDiv.style.borderLeftColor = '#fcc419'; // Желтая полоска слева
+                            
+                            lessonDiv.innerHTML = `
+                                <div class="lesson-main">
+                                    <span style="color: var(--primary-blue)">${lesson.subject}</span>
+                                </div>
+                                <div class="homework-box">
+                                    <strong>ДЗ:</strong> ${task.replace(/\n/g, '<br>')}
+                                </div>
+                            `;
+                            dayCard.appendChild(lessonDiv);
+                        }
+                    });
+                } 
+                
+                if (!hasHomeworkForDay) {
+                    dayCard.innerHTML += `<div style="text-align:center; color:#aaa; font-style:italic; padding: 20px 0;">Заданий нет 🥳</div>`;
+                }
+
+                container.appendChild(dayCard);
+            });
+        }
+        window.onload = fetchHomework;
+    </script>
+</body>
+</html>
