@@ -5,6 +5,8 @@ from telebot import types
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+import requests
+import uuid
 load_dotenv()
 
 app = Flask(__name__)
@@ -87,8 +89,12 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS main_lessons 
                  (id SERIAL PRIMARY KEY, class_name TEXT, day TEXT, lesson_num INTEGER, subject TEXT, room TEXT)''')
     
+    # === ТАБЛИЦА ДЛЯ ДОМАШКИ ===
     c.execute('''CREATE TABLE IF NOT EXISTS homework 
                  (id SERIAL PRIMARY KEY, day TEXT, subject TEXT, task TEXT, UNIQUE(day, subject))''')
+                 
+    # Добавляем колонку для фото, если ее еще нет
+    c.execute("ALTER TABLE homework ADD COLUMN IF NOT EXISTS photo_url TEXT")
     
     conn.commit()
     c.close()
@@ -391,10 +397,11 @@ def process_hw_day(message):
     
     instructions = (
         f"📅 **Расписание на {day}:**\n{schedule_text}\n\n"
-        f"Напиши домашнее задание **ОДНИМ сообщением** в формате:\n\n"
-        f"`Алгебра: номера 123, 124`\n"
+        f"Напиши домашнее задание **ОДНИМ сообщением**.\n"
+        f"📸 **Ты можешь прикрепить ОДНО фото к этому сообщению!** (Текст пиши прямо в подписи к фото).\n\n"
+        f"`Алгебра: номера 123`\n"
         f"`Химия: параграф 5`\n\n"
-        f"*(Предмет пиши так же, как в расписании. Чтобы удалить домашку для отдельного предмета, напиши `Предмет: -`)*"
+        f"*(Чтобы удалить домашку, напиши `Предмет: -`)*"
     )
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(types.KeyboardButton("❌ Отмена"))
@@ -402,46 +409,82 @@ def process_hw_day(message):
     bot.register_next_step_handler(msg, save_multiple_hw, day)
 
 def save_multiple_hw(message, day):
-    if message.text == "❌ Отмена":
-        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.from_user.id))
+    # Если прислали картинку, текст будет в caption. Иначе в text.
+    text = message.caption if message.photo else message.text
+
+    if not text:
+        msg = bot.send_message(message.chat.id, "❌ Я не вижу текста. Пожалуйста, отправь текст или прикрепи фото **с подписью**.")
+        bot.register_next_step_handler(msg, save_multiple_hw, day)
         return
 
-    lines = message.text.strip().split('\n')
+    if text == "❌ Отмена":
+        bot.send_message(message.chat.id, "Действие отменено.", reply_markup=get_main_keyboard(message.fromuser.id))
+        return
+
+    # --- ЗАГРУЗКА ФОТО В ОБЛАКО ---
+    photo_public_url = None
+    if message.photo:
+        try:
+            bot.send_message(message.chat.id, "⏳ Обрабатываю фото и загружаю в облако...")
+            
+            # Берем фото в максимальном качестве
+            file_info = bot.get_file(message.photo[-1].file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            
+            # Уникальное имя для файла
+            file_name = f"{uuid.uuid4()}.jpg"
+            
+            supabase_url = os.getenv('SUPABASE_URL', '').rstrip('/')
+            supabase_key = os.getenv('SUPABASE_KEY')
+            
+            # API запрос к Supabase Storage
+            upload_url = f"{supabase_url}/storage/v1/object/homework/{file_name}"
+            headers = {
+                "Authorization": f"Bearer {supabase_key}",
+                "apikey": supabase_key,
+                "Content-Type": "image/jpeg"
+            }
+            
+            resp = requests.post(upload_url, headers=headers, data=downloaded_file)
+            
+            if resp.status_code == 200:
+                photo_public_url = f"{supabase_url}/storage/v1/object/public/homework/{file_name}"
+            else:
+                bot.send_message(message.chat.id, f"⚠️ Не удалось сохранить фото в облако. Будет сохранен только текст.")
+        except Exception as e:
+            print(f"Ошибка загрузки фото: {e}")
+            bot.send_message(message.chat.id, "⚠️ Произошла ошибка при загрузке фото.")
+
+    lines = text.strip().split('\n')
     saved_count = 0
     errors = []
     moved_info = []
 
     full_week = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница']
-    
     conn = get_db_connection()
     c = conn.cursor()
 
-    # --- 1. СОБИРАЕМ АКТУАЛЬНОЕ РАСПИСАНИЕ НА НЕДЕЛЮ ---
+    # --- СОБИРАЕМ АКТУАЛЬНОЕ РАСПИСАНИЕ ---
     c.execute("SELECT day, subject FROM lessons WHERE class_name='8А'")
     temp_lessons = c.fetchall()
     c.execute("SELECT day, subject FROM main_lessons WHERE class_name='8А'")
     main_lessons = c.fetchall()
 
     schedule = {d: set() for d in full_week}
-    
     for d, s in main_lessons:
-        if d in schedule:
-            schedule[d].add(s.strip().lower())
+        if d in schedule: schedule[d].add(s.strip().lower())
 
     days_with_temp = set([r[0] for r in temp_lessons])
     for d in days_with_temp:
-        if d in schedule:
-            schedule[d] = set()
+        if d in schedule: schedule[d] = set()
 
     for d, s in temp_lessons:
-        if d in schedule:
-            schedule[d].add(s.strip().lower())
+        if d in schedule: schedule[d].add(s.strip().lower())
 
-    # --- 2. ОБРАБАТЫВАЕМ ДОМАШКУ ---
+    # --- ОБРАБАТЫВАЕМ ТЕКСТ ---
     for line in lines:
         line = line.strip()
-        if not line:
-            continue
+        if not line: continue
         
         if ':' not in line:
             errors.append(f"Пропущено (нет двоеточия): `{line}`")
@@ -451,22 +494,19 @@ def save_multiple_hw(message, day):
         original_subject = parts[0].strip()
         task = parts[1].strip()
 
-        if task.startswith('"') and task.endswith('"'):
-            task = task[1:-1].strip()
-        elif task.startswith("'") and task.endswith("'"):
-            task = task[1:-1].strip()
+        if task.startswith('"') and task.endswith('"'): task = task[1:-1].strip()
+        elif task.startswith("'") and task.endswith("'"): task = task[1:-1].strip()
 
         if not original_subject or not task:
             errors.append(f"Пропущено (пустое значение): `{line}`")
             continue
 
-        # --- 3. УМНЫЙ ПЕРЕНОС ---
         norm_sub = original_subject.lower()
         target_day = day
         
+        # --- УМНЫЙ ПЕРЕНОС ---
         if day in full_week:
             start_index = full_week.index(day)
-            
             if norm_sub not in schedule[target_day]:
                 found = False
                 for i in range(start_index, len(full_week)):
@@ -479,45 +519,31 @@ def save_multiple_hw(message, day):
                         if norm_sub in schedule[full_week[i]]:
                             target_day = full_week[i]
                             break
-                
-                # Пишем о переносе только если это не удаление (чтобы не путать)
                 if target_day != day and task != '-' and task != '—':
                     moved_info.append(f"🔄 **{original_subject}** перенесен(а) на **{target_day}**")
 
-        # --- 4. СОХРАНЯЕМ ИЛИ УДАЛЯЕМ ---
+        # --- СОХРАНЯЕМ В БАЗУ (ТЕПЕРЬ С ФОТО) ---
         if task == '-' or task == '—':
-            # 1. Удаляем с целевого дня (куда система думает, что оно перенеслось)
             c.execute("DELETE FROM homework WHERE day=%s AND subject=%s", (target_day, original_subject))
-            # 2. Удаляем с изначального дня (на всякий случай)
             c.execute("DELETE FROM homework WHERE day=%s AND subject=%s", (day, original_subject))
-            
-            # 3. УДАЛЕНИЕ "ПРИЗРАКОВ": ищем все домашки по этому предмету
             c.execute("SELECT day FROM homework WHERE subject=%s", (original_subject,))
             for (hw_day,) in c.fetchall():
-                # Если в этот день урока больше нет в расписании — смело стираем зависшую домашку!
                 if norm_sub not in schedule.get(hw_day, set()):
                     c.execute("DELETE FROM homework WHERE day=%s AND subject=%s", (hw_day, original_subject))
-                    
             saved_count += 1
         else:
-            # Обычное сохранение/обновление домашки
-            c.execute("""INSERT INTO homework (day, subject, task) VALUES (%s, %s, %s) 
-                         ON CONFLICT (day, subject) DO UPDATE SET task = EXCLUDED.task""", 
-                      (target_day, original_subject, task))
+            c.execute("""INSERT INTO homework (day, subject, task, photo_url) VALUES (%s, %s, %s, %s) 
+                         ON CONFLICT (day, subject) DO UPDATE SET task = EXCLUDED.task, photo_url = EXCLUDED.photo_url""", 
+                      (target_day, original_subject, task, photo_public_url))
             saved_count += 1
 
     conn.commit()
     c.close()
     conn.close()
 
-    # --- 5. ФОРМИРУЕМ ОТВЕТ ---
     response = f"✅ Успешно обработано заданий: **{saved_count}**."
-    
-    if moved_info:
-        response += "\n\n" + "\n".join(moved_info)
-        
-    if errors:
-        response += "\n\n⚠️ **Ошибки (эти строки не сохранились):**\n" + "\n".join(errors)
+    if moved_info: response += "\n\n" + "\n".join(moved_info)
+    if errors: response += "\n\n⚠️ **Ошибки:**\n" + "\n".join(errors)
 
     bot.send_message(message.chat.id, response, parse_mode="Markdown", reply_markup=get_main_keyboard(message.from_user.id))
 

@@ -94,7 +94,6 @@
     <script>
         async function fetchHomework() {
             try {
-                // Запрашиваем ОДНОВРЕМЕННО и расписание, и домашку
                 const [scheduleRes, hwRes] = await Promise.all([
                     fetch('/api/timetable'),
                     fetch('/api/homework')
@@ -105,56 +104,47 @@
 
                 const fullWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
                 const hwMap = {};
+                const normalize = (str) => str.trim().toLowerCase();
 
-                // Функция-помощник: проверяет, есть ли предмет в расписании в конкретный день
                 function subjectExistsOnDay(subject, day) {
-                    return lessons.some(l => l.day === day && l.subject === subject);
+                    const normSub = normalize(subject);
+                    return lessons.some(l => l.day === day && normalize(l.subject) === normSub);
                 }
 
-                // === УМНАЯ СОРТИРОВКА И ПЕРЕНОС ДОМАШКИ ===
                 hwData.forEach(hw => {
-                    if (hw.task === "-") return; // Пропускаем удаленную домашку
+                    if (hw.task === "-") return;
 
                     let startIndex = fullWeek.indexOf(hw.day);
-                    let targetDay = hw.day; // По умолчанию пытаемся поставить на тот день, на который задали
+                    let targetDay = hw.day;
 
                     if (startIndex !== -1) {
                         let found = false;
-                        
-                        // 1. Ищем этот предмет начиная с заданного дня и двигаемся вперед до пятницы
                         for (let i = startIndex; i < fullWeek.length; i++) {
                             if (subjectExistsOnDay(hw.subject, fullWeek[i])) {
                                 targetDay = fullWeek[i];
-                                found = true;
-                                break;
+                                found = true; break;
                             }
                         }
-                        
-                        // 2. Если впереди урока нет (например, пятничную химию отменили), 
-                        // ищем его в начале недели (с понедельника), чтобы домашка не потерялась!
                         if (!found) {
                             for (let i = 0; i < startIndex; i++) {
                                 if (subjectExistsOnDay(hw.subject, fullWeek[i])) {
-                                    targetDay = fullWeek[i];
-                                    break;
+                                    targetDay = fullWeek[i]; break;
                                 }
                             }
                         }
                     }
 
-                    // Прикрепляем домашку к найденному (или оригинальному) дню
-                    const key = `${targetDay}_${hw.subject}`;
+                    const key = `${targetDay}_${normalize(hw.subject)}`;
                     
-                    // Если на этот день уже съехалась какая-то другая домашка по этому предмету, 
-                    // мы не удаляем старую, а аккуратно склеиваем их!
+                    // Сохраняем как объект (текст + ссылка на фото)
                     if (hwMap[key]) {
-                        hwMap[key] += `<br><br><span style="color:#b08d00; font-size:12px;">+ Перенесенное:</span><br>` + hw.task;
+                        hwMap[key].task += `<br><br><span style="color:#ffffff; font-size:12px; background: rgba(0,0,0,0.2); padding: 2px 5px; border-radius: 4px;">+ Дополнение:</span><br>` + hw.task;
+                        if (hw.photo_url) hwMap[key].photo = hw.photo_url;
                     } else {
-                        hwMap[key] = hw.task;
+                        hwMap[key] = { task: hw.task, photo: hw.photo_url };
                     }
                 });
 
-                // Передаем умную карту домашек в функцию отрисовки
                 renderHomework(lessons, hwMap);
             } catch (err) {
                 console.error("Ошибка:", err);
@@ -175,6 +165,7 @@
             const fullWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
             const todayName = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(new Date());
             const capitalizedToday = todayName.charAt(0).toUpperCase() + todayName.slice(1);
+            const normalize = (str) => str.trim().toLowerCase();
 
             fullWeek.forEach(day => {
                 const dayCard = document.createElement('div');
@@ -183,69 +174,54 @@
                 dayCard.innerHTML = `<div class="day-title">${day}</div>`;
                 
                 const dayLessons = daysData[day];
-                let hasHomeworkForDay = false; // Флаг, есть ли вообще домашка в этот день
+                let hasHomeworkForDay = false;
 
                 if (dayLessons && dayLessons.length > 0) {
                     dayLessons.sort((a, b) => a.lesson_num - b.lesson_num);
                     dayLessons.forEach(lesson => {
-                        // Ищем домашку по ключу "День_Предмет"
-                        const task = hwMap[`${day}_${lesson.subject}`];
+                        const key = `${day}_${normalize(lesson.subject)}`;
+                        const hwObj = hwMap[key];
                         
-                        // Если домашка есть, рисуем карточку урока
-                        // Если домашка есть, рисуем карточку урока
-                        if (task) {
+                        if (hwObj) {
                             hasHomeworkForDay = true;
                             const lessonDiv = document.createElement('div');
                             lessonDiv.className = 'lesson';
                             
-                            // Твоя точная палитра цветов
                             const colors = {
-                                'Алгебра': '#4c6ef5', 
-                                'Геометрия': '#4c6ef5',
-                                'Вероятность и статистика': '#4c6ef5', 
-                                'Дополнительная математика': '#4c6ef5',
-                                'Решение задач по математике': '#4c6ef5',
-
-                                'Русский язык': '#ff922b', 
-                                'Литература': '#ff922b',
-                                'Практикум по русскому языку': '#ff922b', 
-                                'Функциональная грамотность': '#ff922b',
-
-                                'Английский язык': '#e03131', 
-                                'Английский язык / Информатика': '#c2255b',
-
-                                'Информатика': '#845ef7', 
-                                'Дополнительная информатика': '#7048e8',
-
-                                'Физика': '#15aabf', 
-                                'Химия': '#0ca678', 
-                                'Биология': '#40c057',
-                                'География': '#fab005',
-
-                                'История': '#fa5252', 
-                                'Обществознание': '#be4bdb', 
-                                'Семьеведение': '#f06595',
-                                'ОБЗР': '#5c940d',
-
-                                'Физкультура': '#51cf66', 
-                                'Музыка': '#fcc419', 
-                                'Труд': '#a34e24',
-                                'Классный час': '#20c997'
+                                'Алгебра': '#4c6ef5', 'Геометрия': '#4c6ef5', 'Вероятность и статистика': '#4c6ef5', 
+                                'Дополнительная математика': '#4c6ef5', 'Решение задач по математике': '#4c6ef5',
+                                'Русский язык': '#ff922b', 'Литература': '#ff922b', 'Практикум по русскому языку': '#ff922b', 
+                                'Функциональная грамотность': '#ff922b', 'Английский язык': '#e03131', 
+                                'Английский язык / Информатика': '#c2255b', 'Информатика': '#845ef7', 
+                                'Дополнительная информатика': '#7048e8', 'Физика': '#15aabf', 'Химия': '#0ca678', 
+                                'Биология': '#40c057', 'География': '#fab005', 'История': '#fa5252', 
+                                'Обществознание': '#be4bdb', 'Семьеведение': '#f06595', 'ОБЗР': '#5c940d',
+                                'Физкультура': '#51cf66', 'Музыка': '#fcc419', 'Труд': '#a34e24', 'Классный час': '#20c997'
                             };
 
-                            // Берем цвет из палитры (если предмета вдруг нет, ставим серый #ccc)
                             const subjectColor = colors[lesson.subject] || '#ccc';
-                            
-                            // Красим левую полоску карточки
                             lessonDiv.style.borderLeftColor = subjectColor;
 
-                            // Собираем саму карточку (желтый блок для домашки оставляем как есть)
+                            // Создаем красивый блок с фото, если оно есть
+                            let photoHtml = "";
+                            if (hwObj.photo) {
+                                photoHtml = `
+                                    <div style="margin-top: 10px; background: rgba(0,0,0,0.1); padding: 5px; border-radius: 8px;">
+                                        <a href="${hwObj.photo}" target="_blank">
+                                            <img src="${hwObj.photo}" alt="Фото задания" style="max-width: 100%; max-height: 250px; border-radius: 6px; display: block; margin: 0 auto; object-fit: contain;">
+                                        </a>
+                                        <div style="text-align: center; font-size: 11px; margin-top: 5px; color: #ffffff; opacity: 0.8;">Нажми на фото, чтобы увеличить</div>
+                                    </div>
+                                `;
+                            }
+
                             lessonDiv.innerHTML = `
                                 <div class="lesson-main">
                                     <span style="color: var(--primary-blue)">${lesson.subject}</span>
                                 </div>
                                 <div class="homework-box">
-                                    <strong>ДЗ:</strong> ${task.replace(/\n/g, '<br>')}
+                                    <strong>ДЗ:</strong> ${hwObj.task.replace(/\n/g, '<br>')}
+                                    ${photoHtml}
                                 </div>
                             `;
                             dayCard.appendChild(lessonDiv);
@@ -261,31 +237,14 @@
             });
         }
 
-        // Функция мгновенного обновления таблицы
+        // Кнопка мгновенного обновления
         async function forceRefresh() {
             const btn = document.getElementById('refreshBtn');
-            btn.classList.add('spinning'); // Запускаем анимацию кручения кнопки
-            
-            // Показываем красивый кружок загрузки на месте таблицы
+            if(btn) btn.classList.add('spinning');
             const container = document.getElementById('timetableContainer');
-            container.innerHTML = `
-                <div class="loader-container">
-                    <div class="spinner"></div>
-                    <div>Обновление...</div>
-                </div>
-            `;
-            
-            // Умная проверка: на какой странице мы находимся?
-            if (typeof fetchHomework === 'function') {
-                await fetchHomework(); // Обновляем домашку
-            } else {
-                await fetchTimetable(); // Обновляем расписание
-            }
-            
-            // Останавливаем кручение кнопки через полсекунды (чтобы было плавно)
-            setTimeout(() => {
-                btn.classList.remove('spinning');
-            }, 500);
+            container.innerHTML = `<div class="loader-container"><div class="spinner"></div><div>Обновление...</div></div>`;
+            await fetchHomework();
+            if(btn) setTimeout(() => { btn.classList.remove('spinning'); }, 500);
         }
 
         window.onload = fetchHomework;
