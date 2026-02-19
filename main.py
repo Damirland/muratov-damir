@@ -407,47 +407,105 @@ def save_multiple_hw(message, day):
     lines = message.text.strip().split('\n')
     saved_count = 0
     errors = []
+    moved_info = [] # Список для красивого отчета о переносах
 
+    full_week = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница']
+    
     conn = get_db_connection()
     c = conn.cursor()
 
+    # --- 1. СОБИРАЕМ АКТУАЛЬНОЕ РАСПИСАНИЕ НА НЕДЕЛЮ ---
+    c.execute("SELECT day, subject FROM lessons WHERE class_name='8А'")
+    temp_lessons = c.fetchall()
+    c.execute("SELECT day, subject FROM main_lessons WHERE class_name='8А'")
+    main_lessons = c.fetchall()
+
+    schedule = {d: set() for d in full_week}
+    
+    # Заполняем основным расписанием
+    for d, s in main_lessons:
+        if d in schedule:
+            schedule[d].add(s.strip().lower())
+
+    # Если на какой-то день есть временные изменения, они перекрывают основные
+    days_with_temp = set([r[0] for r in temp_lessons])
+    for d in days_with_temp:
+        if d in schedule:
+            schedule[d] = set() # Очищаем день от основного расписания
+
+    # Добавляем временные уроки
+    for d, s in temp_lessons:
+        if d in schedule:
+            schedule[d].add(s.strip().lower())
+
+    # --- 2. ОБРАБАТЫВАЕМ ДОМАШКУ ---
     for line in lines:
         line = line.strip()
         if not line:
             continue
         
-        # Проверяем, есть ли двоеточие в строке
         if ':' not in line:
             errors.append(f"Пропущено (нет двоеточия): `{line}`")
             continue
 
-        # Разбиваем по первому двоеточию
         parts = line.split(':', 1)
-        subject = parts[0].strip()
+        original_subject = parts[0].strip()
         task = parts[1].strip()
 
-        # Если модератор написал домашку в кавычках ("домашка"), убираем их для красоты
+        # Убираем лишние кавычки
         if task.startswith('"') and task.endswith('"'):
             task = task[1:-1].strip()
         elif task.startswith("'") and task.endswith("'"):
             task = task[1:-1].strip()
 
-        if not subject or not task:
+        if not original_subject or not task:
             errors.append(f"Пропущено (пустое значение): `{line}`")
             continue
 
-        # UPSERT магия: обновляем только те предметы, которые прислали. 
-        # Остальные предметы на этот день в базе не трогаются!
+        # --- 3. УМНЫЙ ПЕРЕНОС ПЕРЕД СОХРАНЕНИЕМ В БАЗУ ---
+        norm_sub = original_subject.lower()
+        target_day = day
+        
+        if day in full_week:
+            start_index = full_week.index(day)
+            
+            # Если предмета нет в выбранный день
+            if norm_sub not in schedule[target_day]:
+                found = False
+                # Ищем вперед
+                for i in range(start_index, len(full_week)):
+                    if norm_sub in schedule[full_week[i]]:
+                        target_day = full_week[i]
+                        found = True
+                        break
+                # Если не нашли впереди, ищем с начала недели
+                if not found:
+                    for i in range(0, start_index):
+                        if norm_sub in schedule[full_week[i]]:
+                            target_day = full_week[i]
+                            break
+                
+                # Если день изменился, записываем в отчет
+                if target_day != day:
+                    moved_info.append(f"🔄 **{original_subject}** перенесен(а) на **{target_day}**")
+
+        # --- 4. СОХРАНЯЕМ В БАЗУ НА ПРАВИЛЬНЫЙ ДЕНЬ ---
+        # Обрати внимание: сохраняем в target_day, а не в изначальный day!
         c.execute("""INSERT INTO homework (day, subject, task) VALUES (%s, %s, %s) 
                      ON CONFLICT (day, subject) DO UPDATE SET task = EXCLUDED.task""", 
-                  (day, subject, task))
+                  (target_day, original_subject, task))
         saved_count += 1
 
     conn.commit()
     c.close()
     conn.close()
 
-    response = f"✅ Успешно сохранено заданий: **{saved_count}** на {day}."
+    # --- 5. ФОРМИРУЕМ ОТВЕТ В ТЕЛЕГРАМ ---
+    response = f"✅ Успешно сохранено заданий: **{saved_count}**."
+    
+    if moved_info:
+        response += "\n\n" + "\n".join(moved_info)
+        
     if errors:
         response += "\n\n⚠️ **Ошибки (эти строки не сохранились):**\n" + "\n".join(errors)
 
