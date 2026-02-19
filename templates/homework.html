@@ -117,19 +117,15 @@
                     let startIndex = fullWeek.indexOf(hw.day);
                     let targetDay = hw.day;
 
+                    let startIndex = fullWeek.indexOf(hw.day);
+                    let targetDay = hw.day;
+
                     if (startIndex !== -1) {
-                        let found = false;
+                        // Ищем ТОЛЬКО вперед до пятницы
                         for (let i = startIndex; i < fullWeek.length; i++) {
                             if (subjectExistsOnDay(hw.subject, fullWeek[i])) {
                                 targetDay = fullWeek[i];
-                                found = true; break;
-                            }
-                        }
-                        if (!found) {
-                            for (let i = 0; i < startIndex; i++) {
-                                if (subjectExistsOnDay(hw.subject, fullWeek[i])) {
-                                    targetDay = fullWeek[i]; break;
-                                }
+                                break;
                             }
                         }
                     }

@@ -508,17 +508,13 @@ def save_multiple_hw(message, day):
         if day in full_week:
             start_index = full_week.index(day)
             if norm_sub not in schedule[target_day]:
-                found = False
+                # Ищем ТОЛЬКО вперед до конца недели
                 for i in range(start_index, len(full_week)):
                     if norm_sub in schedule[full_week[i]]:
                         target_day = full_week[i]
-                        found = True
                         break
-                if not found:
-                    for i in range(0, start_index):
-                        if norm_sub in schedule[full_week[i]]:
-                            target_day = full_week[i]
-                            break
+                
+                # Пишем о переносе только если день изменился и это не удаление
                 if target_day != day and task != '-' and task != '—':
                     moved_info.append(f"🔄 **{original_subject}** перенесен(а) на **{target_day}**")
 
