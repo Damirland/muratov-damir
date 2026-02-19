@@ -228,7 +228,9 @@ def process_day_selection(message, action):
             # Убрали Markdown (обратные кавычки), чтобы избежать сбоев при копировании
             msg_text = f"Пришли расписание на {day.lower()} в формате ниже (кабинет вставляется автоматически, но если надо указать другой, то указываем в скобочках):\n\n{schedule_text}"
             
-            msg = bot.send_message(message.chat.id, msg_text, reply_markup=types.ReplyKeyboardRemove())
+            # Создаем клавиатуру только с одной кнопкой Отмена
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(types.KeyboardButton("❌ Отмена"))
+            msg = bot.send_message(message.chat.id, msg_text, reply_markup=markup)
             bot.register_next_step_handler(msg, save_schedule, day, action)
         except Exception as e:
             bot.send_message(message.chat.id, f"⚠️ Ошибка при загрузке шаблона: {e}")
