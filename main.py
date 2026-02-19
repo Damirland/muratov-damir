@@ -472,12 +472,19 @@ def list_admins(message):
     text = "👥 **Список модераторов:**\n\n"
     for row in admins:
         uid, username, first_name = row
-        if username: display_name = f"@{username}"
-        elif first_name: display_name = f"{first_name} (ID: {uid})"
-        else: display_name = f"ID: {uid}"
+        
+        # Добавляем ID ко всем вариантам отображения (и делаем его копируемым ` `)
+        if username: 
+            display_name = f"@{username} (ID: `{uid}`)"
+        elif first_name: 
+            display_name = f"{first_name} (ID: `{uid}`)"
+        else: 
+            display_name = f"ID: `{uid}`"
             
-        if uid == SUPER_ADMIN_ID: text += f"👑 {display_name} (Создатель)\n"
-        else: text += f"👤 {display_name}\n"
+        if uid == SUPER_ADMIN_ID: 
+            text += f"👑 {display_name} (Создатель)\n"
+        else: 
+            text += f"👤 {display_name}\n"
 
     text += "\n❌ Чтобы удалить модератора, отправь:\n`/del_admin ID`"
     bot.send_message(message.chat.id, text, parse_mode='Markdown')
