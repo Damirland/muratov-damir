@@ -132,7 +132,7 @@ def get_main_keyboard(user_id):
         btn1 = types.KeyboardButton("📝 Добавить изменение")
         btn2 = types.KeyboardButton("📅 Изменить основное расписание")
         btn3 = types.KeyboardButton("🗑 Очистить изменения дня")
-        btn4 = types.KeyboardButton("💥 Сбросить все до основного расписания")
+        btn4 = types.KeyboardButton("💥 Удалить всю домашку и изменения")
         btn5 = types.KeyboardButton("📚 Управление домашкой") # Новая кнопка
         markup.add(btn1, btn2, btn3, btn4, btn5)
         if user_id == SUPER_ADMIN_ID:
@@ -330,7 +330,7 @@ def execute_clear(message, day):
     conn.close()
     bot.send_message(message.chat.id, f"🗑 Изменения на {day} удалены.", reply_markup=get_main_keyboard(message.from_user.id))
 
-@bot.message_handler(func=lambda m: m.text == "💥 Сбросить все до основного расписания")
+@bot.message_handler(func=lambda m: m.text == "💥 Удалить всю домашку и изменения")
 def clear_all(message):
     if not is_admin(message.from_user.id): return
     conn = get_db_connection()
@@ -340,7 +340,7 @@ def clear_all(message):
     conn.commit()
     c.close()
     conn.close()
-    bot.send_message(message.chat.id, "💥 Все временные изменения удалены!", reply_markup=get_main_keyboard(message.from_user.id))
+    bot.send_message(message.chat.id, "💥 Все удалено!", reply_markup=get_main_keyboard(message.from_user.id))
 
 def auto_clear_schedule():
     try:
